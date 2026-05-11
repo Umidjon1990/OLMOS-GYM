@@ -1,0 +1,233 @@
+Sen professional full-stack web-app developer sifatida ishlaysan. Menga Gym CRM + Telegram Bot + rasmiy gym sayti yaratib ber.
+
+Loyiha nomi: Gym CRM Management System
+
+Asosiy maqsad:
+Sport zal administratorlari abonentlarni, tariflarni, obunalarni, to‘lovlarni, Telegram xabarlarni va gym rasmiy saytini bitta tizim orqali boshqara olishi kerak.
+
+Texnologiya:
+- Full-stack web app
+- Mobil responsive dizayn
+- Admin panel
+- Public landing website
+- Telegram bot integratsiyasi
+- Database bilan ishlash
+- Auth/login tizimi
+- Agar kerak bo‘lsa, Replit imkoniyatiga mos texnologiyalarni o‘zing tanla
+
+Asosiy modullar:
+
+1. Admin login
+Admin tizimga login/password orqali kiradi.
+Admin faqat o‘z gym ma’lumotlarini boshqaradi.
+
+2. Dashboard
+Admin dashboardda quyidagilarni ko‘radi:
+- jami abonentlar soni
+- aktiv abonentlar
+- muddati tugagan abonentlar
+- obunasi 3 kun ichida tugaydiganlar
+- to‘lov kutayotganlar
+- tariflar bo‘yicha abonentlar soni
+- umumiy tushum
+- yangi sayt arizalari
+
+3. Abonentlar boshqaruvi
+Admin abonent qo‘sha oladi.
+Kerakli maydonlar:
+- ism
+- familiya
+- telefon raqam
+- tarif
+- obuna boshlanish sanasi
+- obuna tugash sanasi
+- to‘lov holati
+- status: aktiv, muddati tugagan, to‘lov kutilmoqda, bloklangan
+
+Admin abonentni:
+- qo‘shadi
+- tahrirlaydi
+- o‘chiradi
+- qidiradi
+- tarif bo‘yicha filter qiladi
+- status bo‘yicha filter qiladi
+- telefon raqam orqali topadi
+
+4. Tariflar boshqaruvi
+Boshlang‘ich tariflar:
+- Oddiy
+- Standart
+- Premium
+
+Admin har bir tarifni tahrirlay oladi:
+- tarif nomi
+- narxi
+- davomiyligi, masalan 30 kun
+- izoh
+- aktiv/nofaol holati
+
+Admin yangi tarif qo‘sha olsin.
+
+5. Obuna boshqaruvi
+Har bir abonentda obuna muddati bo‘ladi.
+Tizim avtomatik hisoblasin:
+- necha kun qoldi
+- obuna tugaganmi
+- tez orada tugaydimi
+
+Obuna tugashiga:
+- 3 kun qolganda
+- 1 kun qolganda
+- tugagan kuni
+
+Telegram orqali xabar yuborilishi kerak.
+
+6. To‘lovlar
+To‘lovlar hozircha qo‘lda boshqariladi.
+Admin:
+- to‘lov summasini kiritadi
+- to‘lov sanasini belgilaydi
+- tarifni tanlaydi
+- obuna muddatini uzaytiradi
+- to‘lovni tasdiqlaydi
+
+To‘lov tasdiqlansa, abonentga Telegram orqali xabar boradi.
+
+7. Telegram bot
+Telegram bot ikki xil ishlasin:
+
+A) Admin uchun:
+Admin bot orqali:
+- abonent qo‘sha oladi
+- abonentni telefon raqam orqali qidiradi
+- tariflarni ko‘radi
+- obunasi tugayotganlarni ko‘radi
+- to‘lovni tasdiqlay oladi
+
+B) Abonent uchun:
+Abonent botga kiradi va telefon raqamini yuboradi.
+Telefon raqam database’da topilsa, bot unga ko‘rsatadi:
+- ism-familiya
+- tarif nomi
+- obuna tugash sanasi
+- qancha kun qolgani
+- to‘lov holati
+
+Agar telefon raqam topilmasa:
+“Siz hali ro‘yxatdan o‘tmagansiz. Iltimos, admin bilan bog‘laning.”
+
+8. Web-app va Telegram sinxron ishlashi
+Barcha ma’lumotlar bitta database’da saqlansin.
+Telegram bot orqali qo‘shilgan abonent web-app’da ko‘rinsin.
+Web-app orqali qo‘shilgan abonent Telegram botda tanilsin.
+
+9. Public gym website
+Tizimda gym uchun rasmiy sayt ham bo‘lsin.
+
+Saytda quyidagilar chiqsin:
+- gym nomi
+- logo
+- banner
+- gym haqida ma’lumot
+- tariflar
+- galereya rasmlari
+- trenerlar
+- manzil
+- telefon raqam
+- ish vaqti
+- ijtimoiy tarmoqlar
+- ro‘yxatdan o‘tish formasi
+
+10. Sayt kontent boshqaruvi
+Admin panelda “Sayt sozlamalari” bo‘limi bo‘lsin.
+Admin saytni boshqara olsin:
+- gym nomini o‘zgartirish
+- logo yuklash
+- banner yuklash
+- tavsif yozish
+- telefon raqam kiritish
+- manzil kiritish
+- ish vaqtini kiritish
+- ijtimoiy tarmoqlarni kiritish
+- galereya rasmlarini qo‘shish
+- trenerlar qo‘shish
+- saytni aktiv/nofaol qilish
+
+11. Saytdan ro‘yxatdan o‘tish
+Saytda mijoz forma to‘ldiradi:
+- ism
+- familiya
+- telefon raqam
+- tanlangan tarif
+
+Bu ma’lumot admin panelda “Yangi arizalar” bo‘limida chiqsin.
+Admin arizani:
+- tasdiqlaydi
+- rad etadi
+- abonentga aylantiradi
+
+Tasdiqlansa, mijoz abonentlar ro‘yxatiga qo‘shiladi.
+
+12. Mobil responsive dizayn
+Admin panel asosan telefonda ishlaydi.
+Shuning uchun:
+- mobile-first dizayn qil
+- katta tugmalar
+- oddiy menyu
+- pastki navigatsiya
+- tez qidiruv
+- sodda abonent qo‘shish formasi
+- dashboard kartochkalar ko‘rinishida bo‘lsin
+
+13. Database modellari
+Kerakli database jadvallarini yarat:
+- admins
+- subscribers
+- plans
+- payments
+- subscription_logs
+- telegram_users
+- website_settings
+- website_gallery
+- trainers
+- website_applications
+- notifications
+
+14. Qo‘shimcha talablar
+Tizim professional, toza va kengaytiriladigan bo‘lsin.
+Kod strukturasi tartibli bo‘lsin.
+Xatoliklar uchun validation bo‘lsin.
+Telefon raqam unique bo‘lsin.
+Obuna muddati avtomatik tekshirilsin.
+Telegram xabar yuborish uchun joy tayyorlab qo‘yilsin.
+Bot token environment variable orqali olinsin.
+Admin login xavfsiz bo‘lsin.
+UI zamonaviy va sodda bo‘lsin.
+
+15. Replit AI uchun qo‘shimcha vazifa
+Agar men yuqorida aytmagan, lekin bunday Gym CRM uchun kerakli foydali funksiyalar bo‘lsa, ularni ham qo‘sh:
+- statistikalar
+- qidiruv
+- filter
+- export
+- abonent profili
+- so‘nggi to‘lovlar
+- tugayotgan obunalar
+- dark/light mode
+- loading states
+- empty states
+- success/error notifications
+
+Loyihani ishlaydigan holatda yarat.
+Avval asosiy MVP funksiyalarni tugat:
+1. Admin login
+2. Dashboard
+3. Abonentlar CRUD
+4. Tariflar CRUD
+5. To‘lovni qo‘lda tasdiqlash
+6. Obuna muddatini hisoblash
+7. Public website
+8. Saytdan ariza yuborish
+9. Telegram bot uchun asosiy integratsiya strukturasi
+
+Keyin qolgan qo‘shimcha funksiyalarni qo‘sh.

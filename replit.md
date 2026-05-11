@@ -1,44 +1,68 @@
-# [Project name]
+# FitZone Gym CRM
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Gym CRM boshqaruv tizimi — obunachi, to'lov, reja va veb-sayt kontentini boshqarish uchun to'liq stack web ilova (o'zbek tilida).
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/api-server run dev` — API server ishga tushirish (port 8080)
+- `pnpm --filter @workspace/gym-crm run dev` — Frontend ishga tushirish
+- `pnpm run typecheck` — barcha paketlar bo'yicha to'liq typecheck
+- `pnpm run build` — typecheck + build barcha paketlar
+- `pnpm --filter @workspace/api-spec run codegen` — OpenAPI spec dan React Query hooks va Zod sxemalarini qayta generatsiya qilish
+- `pnpm --filter @workspace/db run push` — DB sxema o'zgarishlarini yuborish (faqat dev)
+- Required env: `DATABASE_URL` — Postgres ulanish stringi, `SESSION_SECRET`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- API: Express 5 + Clerk auth middleware
 - DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
+- Validation: Zod (import from `"zod"`, NOT `"zod/v4"` — esbuild bundle incompatible)
 - API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite + Tailwind CSS v4 + @clerk/react + wouter router
+- Build: esbuild (ESM bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — API kontrakt (source of truth)
+- `lib/db/src/schema/` — Drizzle ORM sxemalari (plans, subscribers, payments, website, applications, notifications, gallery, trainers)
+- `lib/api-client-react/src/generated/` — Orval tomonidan generatsiya qilingan React Query hooks
+- `artifacts/api-server/src/routes/` — Express route handlerlari
+- `artifacts/gym-crm/src/pages/` — Frontend sahifalari
+- `artifacts/gym-crm/src/App.tsx` — Router va Clerk auth setup
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Contract-first API: OpenAPI spec → Orval codegen → typed hooks va schemas
+- Clerk auth faqat `/admin/*` routelarni himoya qiladi; `/` public landing page
+- Barcha route fayllarda `zod` dan import qilinadi (`"zod"`, `"zod/v4"` EMAS — esbuild resolve qila olmaydi)
+- Mobile-first dizayn: bottom nav bar (mobil), sidebar (desktop)
+- API server paths rewrite qilinmaydi — barcha routelar full base path bilan ishlaydi
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Public landing page**: FitZone Gym haqida ma'lumot, rejalar, trenerlar, aloqa
+- **Admin panel** (Clerk auth bilan himoyalangan):
+  - Dashboard: statistika (jami/faol obunachi, daromad, yangi arizalar)
+  - Obunachlar: qidirish, filter, profil ko'rish, qo'shish/tahrirlash
+  - Rejalar: narx va davomiylik boshqaruvi
+  - To'lovlar: tarix, tasdiqlash
+  - Arizalar: yangi arizalar ro'yxati
+  - Trenerlar: profil va ixtisoslik
+  - Galereya: rasm boshqaruvi
+  - Sayt sozlamalari: gym nomi, aloqa, ijtimoiy tarmoqlar
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- MOBILE-FIRST dizayn majburiy
+- O'zbek tilida interfeys
+- Dark navy + electric blue rang sxemasi
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `zod/v4` subpath esbuild bundle da resolve qilinmaydi — har doim `"zod"` dan import qiling
+- `pnpm run dev` workspace rootda ishga tushirilmaydi — workflow orqali bajaring
+- Leaf packagelar root `tsconfig.json` references ga qo'shilmaydi
 
 ## Pointers
 

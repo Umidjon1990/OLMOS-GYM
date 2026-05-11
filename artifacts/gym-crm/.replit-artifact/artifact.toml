@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Gym CRM"
+version = "1.0.0"
+id = "artifacts/gym-crm"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21045
+
+[services.development]
+run = "pnpm --filter @workspace/gym-crm run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gym-crm", "run", "build" ]
+publicDir = "artifacts/gym-crm/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21045"
+BASE_PATH = "/"

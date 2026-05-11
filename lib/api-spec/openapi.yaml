@@ -1,22 +1,38 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Gym CRM API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Dashboard statistics
+  - name: subscribers
+    description: Subscriber management
+  - name: plans
+    description: Subscription plan management
+  - name: payments
+    description: Payment management
+  - name: website
+    description: Public website settings
+  - name: gallery
+    description: Website gallery
+  - name: trainers
+    description: Gym trainers
+  - name: applications
+    description: Website applications / registration requests
+  - name: notifications
+    description: System notifications
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +40,1084 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Dashboard ──────────────────────────────────────────────────────────────
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/expiring-soon:
+    get:
+      operationId: getExpiringSoon
+      tags: [dashboard]
+      summary: Subscribers whose subscription expires within 3 days
+      responses:
+        "200":
+          description: Expiring soon list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscriber"
+
+  /dashboard/recent-payments:
+    get:
+      operationId: getRecentPayments
+      tags: [dashboard]
+      summary: Recent payment activity
+      responses:
+        "200":
+          description: Recent payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  # ── Subscribers ────────────────────────────────────────────────────────────
+  /subscribers:
+    get:
+      operationId: listSubscribers
+      tags: [subscribers]
+      summary: List subscribers with optional filtering
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, pending, blocked]
+        - name: planId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of subscribers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscriber"
+    post:
+      operationId: createSubscriber
+      tags: [subscribers]
+      summary: Create a new subscriber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriberInput"
+      responses:
+        "201":
+          description: Created subscriber
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscriber"
+
+  /subscribers/{id}:
+    get:
+      operationId: getSubscriber
+      tags: [subscribers]
+      summary: Get a subscriber by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subscriber
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscriber"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSubscriber
+      tags: [subscribers]
+      summary: Update a subscriber
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriberUpdate"
+      responses:
+        "200":
+          description: Updated subscriber
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscriber"
+    delete:
+      operationId: deleteSubscriber
+      tags: [subscribers]
+      summary: Delete a subscriber
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /subscribers/{id}/payments:
+    get:
+      operationId: getSubscriberPayments
+      tags: [subscribers]
+      summary: Get payment history for a subscriber
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  # ── Plans ──────────────────────────────────────────────────────────────────
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: List all plans
+      responses:
+        "200":
+          description: Plans list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+    post:
+      operationId: createPlan
+      tags: [plans]
+      summary: Create a new plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanInput"
+      responses:
+        "201":
+          description: Created plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /plans/{id}:
+    get:
+      operationId: getPlan
+      tags: [plans]
+      summary: Get a plan by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    patch:
+      operationId: updatePlan
+      tags: [plans]
+      summary: Update a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanUpdate"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    delete:
+      operationId: deletePlan
+      tags: [plans]
+      summary: Delete a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Payments ───────────────────────────────────────────────────────────────
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List all payments
+      responses:
+        "200":
+          description: Payments list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      summary: Record a new payment and extend subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Created payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /payments/{id}:
+    get:
+      operationId: getPayment
+      tags: [payments]
+      summary: Get a payment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+    patch:
+      operationId: updatePayment
+      tags: [payments]
+      summary: Update payment status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentUpdate"
+      responses:
+        "200":
+          description: Updated payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /payments/{id}/confirm:
+    post:
+      operationId: confirmPayment
+      tags: [payments]
+      summary: Confirm a payment and activate subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Confirmed payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  # ── Website Settings ───────────────────────────────────────────────────────
+  /website/settings:
+    get:
+      operationId: getWebsiteSettings
+      tags: [website]
+      summary: Get public website settings
+      responses:
+        "200":
+          description: Website settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebsiteSettings"
+    patch:
+      operationId: updateWebsiteSettings
+      tags: [website]
+      summary: Update website settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebsiteSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebsiteSettings"
+
+  # ── Gallery ────────────────────────────────────────────────────────────────
+  /gallery:
+    get:
+      operationId: listGallery
+      tags: [gallery]
+      summary: List gallery images
+      responses:
+        "200":
+          description: Gallery list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GalleryImage"
+    post:
+      operationId: createGalleryImage
+      tags: [gallery]
+      summary: Add a gallery image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GalleryImageInput"
+      responses:
+        "201":
+          description: Added image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryImage"
+
+  /gallery/{id}:
+    delete:
+      operationId: deleteGalleryImage
+      tags: [gallery]
+      summary: Remove a gallery image
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Trainers ───────────────────────────────────────────────────────────────
+  /trainers:
+    get:
+      operationId: listTrainers
+      tags: [trainers]
+      summary: List trainers
+      responses:
+        "200":
+          description: Trainers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trainer"
+    post:
+      operationId: createTrainer
+      tags: [trainers]
+      summary: Add a trainer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainerInput"
+      responses:
+        "201":
+          description: Added trainer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trainer"
+
+  /trainers/{id}:
+    patch:
+      operationId: updateTrainer
+      tags: [trainers]
+      summary: Update a trainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainerUpdate"
+      responses:
+        "200":
+          description: Updated trainer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trainer"
+    delete:
+      operationId: deleteTrainer
+      tags: [trainers]
+      summary: Remove a trainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Applications ───────────────────────────────────────────────────────────
+  /applications:
+    get:
+      operationId: listApplications
+      tags: [applications]
+      summary: List website registration applications
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Applications list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Application"
+    post:
+      operationId: createApplication
+      tags: [applications]
+      summary: Submit a public registration application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationInput"
+      responses:
+        "201":
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  /applications/{id}/approve:
+    post:
+      operationId: approveApplication
+      tags: [applications]
+      summary: Approve and convert to subscriber
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  /applications/{id}/reject:
+    post:
+      operationId: rejectApplication
+      tags: [applications]
+      summary: Reject an application
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rejected application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  # ── Notifications ──────────────────────────────────────────────────────────
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    DashboardStats:
+      type: object
+      required:
+        - totalSubscribers
+        - activeSubscribers
+        - expiredSubscribers
+        - expiringSoon
+        - pendingPayment
+        - totalRevenue
+        - newApplications
+        - planBreakdown
+      properties:
+        totalSubscribers:
+          type: integer
+        activeSubscribers:
+          type: integer
+        expiredSubscribers:
+          type: integer
+        expiringSoon:
+          type: integer
+        pendingPayment:
+          type: integer
+        totalRevenue:
+          type: number
+        newApplications:
+          type: integer
+        planBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanCount"
+
+    PlanCount:
+      type: object
+      required: [planName, count]
+      properties:
+        planName:
+          type: string
+        count:
+          type: integer
+
+    Subscriber:
+      type: object
+      required:
+        - id
+        - firstName
+        - lastName
+        - phone
+        - planId
+        - planName
+        - startDate
+        - endDate
+        - paymentStatus
+        - status
+        - daysLeft
+        - createdAt
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        planId:
+          type: integer
+        planName:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        paymentStatus:
+          type: string
+          enum: [paid, pending, overdue]
+        status:
+          type: string
+          enum: [active, expired, pending, blocked]
+        daysLeft:
+          type: integer
+        telegramChatId:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    SubscriberInput:
+      type: object
+      required: [firstName, lastName, phone, planId, startDate, endDate, paymentStatus, status]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        planId:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        paymentStatus:
+          type: string
+          enum: [paid, pending, overdue]
+        status:
+          type: string
+          enum: [active, expired, pending, blocked]
+        telegramChatId:
+          type: string
+        notes:
+          type: string
+
+    SubscriberUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        planId:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        paymentStatus:
+          type: string
+          enum: [paid, pending, overdue]
+        status:
+          type: string
+          enum: [active, expired, pending, blocked]
+        telegramChatId:
+          type: string
+        notes:
+          type: string
+
+    Plan:
+      type: object
+      required: [id, name, price, durationDays, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        price:
+          type: number
+        durationDays:
+          type: integer
+        description:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        subscriberCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    PlanInput:
+      type: object
+      required: [name, price, durationDays]
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        durationDays:
+          type: integer
+        description:
+          type: string
+        isActive:
+          type: boolean
+
+    PlanUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: number
+        durationDays:
+          type: integer
+        description:
+          type: string
+        isActive:
+          type: boolean
+
+    Payment:
+      type: object
+      required: [id, subscriberId, subscriberName, planId, planName, amount, paymentDate, status, createdAt]
+      properties:
+        id:
+          type: integer
+        subscriberId:
+          type: integer
+        subscriberName:
+          type: string
+        planId:
+          type: integer
+        planName:
+          type: string
+        amount:
+          type: number
+        paymentDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [confirmed, pending, cancelled]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    PaymentInput:
+      type: object
+      required: [subscriberId, planId, amount, paymentDate]
+      properties:
+        subscriberId:
+          type: integer
+        planId:
+          type: integer
+        amount:
+          type: number
+        paymentDate:
+          type: string
+          format: date
+        notes:
+          type: string
+        extendSubscription:
+          type: boolean
+
+    PaymentUpdate:
+      type: object
+      properties:
+        amount:
+          type: number
+        paymentDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [confirmed, pending, cancelled]
+        notes:
+          type: string
+
+    WebsiteSettings:
+      type: object
+      required: [id, gymName, isActive]
+      properties:
+        id:
+          type: integer
+        gymName:
+          type: string
+        tagline:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        bannerUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        workingHours:
+          type: ["string", "null"]
+        instagramUrl:
+          type: ["string", "null"]
+        telegramUrl:
+          type: ["string", "null"]
+        facebookUrl:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    WebsiteSettingsUpdate:
+      type: object
+      properties:
+        gymName:
+          type: string
+        tagline:
+          type: string
+        description:
+          type: string
+        logoUrl:
+          type: string
+        bannerUrl:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        workingHours:
+          type: string
+        instagramUrl:
+          type: string
+        telegramUrl:
+          type: string
+        facebookUrl:
+          type: string
+        isActive:
+          type: boolean
+
+    GalleryImage:
+      type: object
+      required: [id, imageUrl, createdAt]
+      properties:
+        id:
+          type: integer
+        imageUrl:
+          type: string
+        caption:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    GalleryImageInput:
+      type: object
+      required: [imageUrl]
+      properties:
+        imageUrl:
+          type: string
+        caption:
+          type: string
+        sortOrder:
+          type: integer
+
+    Trainer:
+      type: object
+      required: [id, name, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        specialty:
+          type: ["string", "null"]
+        bio:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    TrainerInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        specialty:
+          type: string
+        bio:
+          type: string
+        photoUrl:
+          type: string
+        isActive:
+          type: boolean
+
+    TrainerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        specialty:
+          type: string
+        bio:
+          type: string
+        photoUrl:
+          type: string
+        isActive:
+          type: boolean
+
+    Application:
+      type: object
+      required: [id, firstName, lastName, phone, status, createdAt]
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        planId:
+          type: ["integer", "null"]
+        planName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationInput:
+      type: object
+      required: [firstName, lastName, phone]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        planId:
+          type: integer
+        notes:
+          type: string
+
+    Notification:
+      type: object
+      required: [id, message, type, isRead, createdAt]
+      properties:
+        id:
+          type: integer
+        message:
+          type: string
+        type:
+          type: string
+          enum: [expiring_soon, expired, payment_confirmed, new_application]
+        subscriberId:
+          type: ["integer", "null"]
+        subscriberName:
+          type: ["string", "null"]
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
