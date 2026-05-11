@@ -6,7 +6,7 @@ import {
   paymentsTable,
   notificationsTable,
 } from "@workspace/db";
-import { eq, sql, and, or } from "drizzle-orm";
+import { eq, sql, and, or, ilike } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -266,7 +266,7 @@ async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
     .select({ sub: subscribersTable, planName: plansTable.name })
     .from(subscribersTable)
     .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
-    .where(sql`${subscribersTable.phone} ILIKE ${"%" + clean + "%"}`);
+    .where(ilike(subscribersTable.phone, `%${clean}%`));
 
   if (rows.length === 0) {
     await bot!.sendMessage(
@@ -422,8 +422,8 @@ export function initTelegramBot(): TelegramBot | null {
 
       // ── Main menu buttons ───────────────────────────────────────────────────
       if (text === "➕ Obunachi qo'shish") {
-        resetState(chatId);
         state.step = "add_first_name";
+        state.data = {};
         await bot!.sendMessage(chatId, "👤 A'zoning *ismini* kiriting:", {
           parse_mode: "Markdown",
           reply_markup: { force_reply: true },
@@ -488,8 +488,8 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
       if (data === "fin_pay") {
-        resetState(chatId);
         state.step = "pay_phone";
+        state.data = {};
         await bot!.sendMessage(
           chatId,
           "📞 A'zoning *telefon raqamini* kiriting:",
