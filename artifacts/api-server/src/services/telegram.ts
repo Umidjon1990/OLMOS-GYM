@@ -24,6 +24,7 @@ type Step =
   | "add_last_name"
   | "add_phone"
   | "add_plan"
+  | "add_payment_status"
   | "pay_phone";
 
 interface State {
@@ -498,13 +499,46 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
 
-      // Plan selection during subscriber add
-      if (data.startsWith("plan_")) {
+      // Plan selection during subscriber add — ask payment status next
+      if (data.startsWith("plan_") && state.step === "add_plan") {
         const planId = parseInt(data.replace("plan_", ""));
         state.data.planId = planId;
+        state.step = "add_payment_status";
 
-        const { firstName, lastName, phone } = state.data as Record<string, string>;
         const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+        const planName = plan?.name ?? "—";
+        const planPrice = plan ? Number(plan.price).toLocaleString("uz") : "—";
+
+        await bot!.sendMessage(
+          chatId,
+          `💎 Reja: *${planName}* (${planPrice} so'm)\n\n💳 *To'lov holati qanday?*`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "✅ To'landi", callback_data: "ps_paid" },
+                  { text: "⚠️ Qarz", callback_data: "ps_debt" },
+                ],
+              ],
+            },
+          }
+        );
+        return;
+      }
+
+      // Payment status selection — finalize subscriber creation
+      if (data === "ps_paid" || data === "ps_debt") {
+        const paymentStatus = data === "ps_paid" ? "paid" : "pending";
+        const { firstName, lastName, phone, planId } = state.data as Record<string, string>;
+
+        if (!firstName || !lastName || !phone || !planId) {
+          await bot!.sendMessage(chatId, "❌ Ma'lumotlar to'liq emas. Qaytadan boshlang.", MAIN_KEYBOARD);
+          resetState(chatId);
+          return;
+        }
+
+        const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, Number(planId)));
 
         if (!plan) {
           await bot!.sendMessage(chatId, "❌ Reja topilmadi.", MAIN_KEYBOARD);
@@ -523,13 +557,25 @@ export function initTelegramBot(): TelegramBot | null {
             firstName,
             lastName,
             phone,
-            planId,
+            planId: Number(planId),
             startDate: today,
             endDate: endDateStr,
-            paymentStatus: "pending",
+            paymentStatus,
             status: "active",
           })
           .returning();
+
+        // If paid — also create a confirmed payment record
+        if (paymentStatus === "paid") {
+          await db.insert(paymentsTable).values({
+            subscriberId: newSub.id,
+            planId: Number(planId),
+            amount: String(plan.price),
+            paymentDate: today,
+            status: "confirmed",
+            extendSubscription: false,
+          });
+        }
 
         await db.insert(notificationsTable).values({
           message: `Yangi a'zo (bot orqali): ${firstName} ${lastName} (${phone})`,
@@ -537,15 +583,17 @@ export function initTelegramBot(): TelegramBot | null {
           subscriberName: `${firstName} ${lastName}`,
         });
 
+        const payLabel = paymentStatus === "paid" ? "✅ To'landi" : "⚠️ Qarz";
+
         resetState(chatId);
         await bot!.sendMessage(
           chatId,
           `✅ *A'zo muvaffaqiyatli qo'shildi!*\n\n` +
             `👤 ${firstName} ${lastName}\n` +
             `📞 ${phone}\n` +
-            `💎 Reja: ${plan.name}\n` +
+            `💎 Reja: ${plan.name} — ${Number(plan.price).toLocaleString("uz")} so'm\n` +
             `📅 ${today} → ${endDateStr}\n` +
-            `💳 To'lov holati: ⏳ Kutilmoqda\n\n` +
+            `💳 To'lov: ${payLabel}\n` +
             `🔢 ID: ${newSub.id}`,
           { parse_mode: "Markdown", ...MAIN_KEYBOARD }
         );
