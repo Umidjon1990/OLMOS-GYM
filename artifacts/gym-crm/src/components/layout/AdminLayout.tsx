@@ -11,7 +11,8 @@ import {
   Settings,
   Image,
   Gem,
-  List
+  List,
+  Send
 } from "lucide-react";
 import { useListApplications, getListApplicationsQueryKey } from "@workspace/api-client-react";
 
@@ -42,6 +43,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { href: "/admin/trainers", icon: Gem, label: "Murabbiylar" },
     { href: "/admin/gallery", icon: Image, label: "Galereya" },
     { href: "/admin/website", icon: Settings, label: "Sayt sozlamalari" },
+    { href: "/admin/telegram", icon: Send, label: "Telegram Bot" },
   ];
 
   const NavLinks = () => (

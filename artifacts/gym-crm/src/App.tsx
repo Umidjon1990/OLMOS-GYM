@@ -20,6 +20,7 @@ import Applications from "@/pages/Applications";
 import WebsiteSettingsPage from "@/pages/WebsiteSettings";
 import Gallery from "@/pages/Gallery";
 import Trainers from "@/pages/Trainers";
+import TelegramSettings from "@/pages/TelegramSettings";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 const clerkPubKey = publishableKeyFromHost(
@@ -161,6 +162,7 @@ function ClerkProviderWithRoutes() {
           <ProtectedRoute path="/admin/website" component={WebsiteSettingsPage} />
           <ProtectedRoute path="/admin/gallery" component={Gallery} />
           <ProtectedRoute path="/admin/trainers" component={Trainers} />
+          <ProtectedRoute path="/admin/telegram" component={TelegramSettings} />
           
           <Route component={NotFound} />
         </Switch>

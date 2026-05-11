@@ -4,6 +4,7 @@ import { applicationsTable, plansTable, subscribersTable, notificationsTable } f
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { ListApplicationsQueryParams, CreateApplicationBody } from "@workspace/api-zod";
+import { sendAdminNotification } from "../services/telegram.js";
 
 const router = Router();
 
@@ -45,6 +46,14 @@ router.post("/", async (req, res) => {
       type: "new_application",
       subscriberName: `${app.firstName} ${app.lastName}`,
     });
+
+    await sendAdminNotification(
+      `📬 *Yangi ariza keldi!*\n\n` +
+      `👤 ${app.firstName} ${app.lastName}\n` +
+      `📞 ${app.phone}\n` +
+      `💎 Reja: ${plan?.name ?? "Tanlanmagan"}\n\n` +
+      `Admin panelda ko'rish: /admin/applications`
+    );
 
     res.status(201).json({ ...app, planName: plan?.name ?? null });
   } catch (err) {

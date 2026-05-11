@@ -4,6 +4,7 @@ import { paymentsTable, subscribersTable, plansTable, notificationsTable } from 
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { CreatePaymentBody, UpdatePaymentBody } from "@workspace/api-zod";
+import { sendAdminNotification } from "../services/telegram.js";
 
 const router = Router();
 
@@ -138,6 +139,14 @@ router.post("/:id/confirm", async (req, res) => {
           subscriberId: subscriber.id,
           subscriberName: `${subscriber.firstName} ${subscriber.lastName}`,
         });
+
+        await sendAdminNotification(
+          `✅ *To'lov tasdiqlandi!*\n\n` +
+          `👤 ${subscriber.firstName} ${subscriber.lastName}\n` +
+          `💎 Reja: ${plan.name}\n` +
+          `💰 Miqdor: ${Number(payment.amount).toLocaleString("uz")} so'm\n` +
+          `📅 Obuna tugaydi: ${newEnd.toISOString().split("T")[0]}`
+        );
       }
     }
 
