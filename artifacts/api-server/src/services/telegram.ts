@@ -10,7 +10,6 @@ import { eq, sql, and, or, ilike } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
 let bot: TelegramBot | null = null;
 
 export function getBot(): TelegramBot | null {
@@ -25,7 +24,8 @@ type Step =
   | "add_phone"
   | "add_plan"
   | "add_payment_status"
-  | "pay_phone";
+  | "pay_phone"
+  | "member_phone";
 
 interface State {
   step: Step;
@@ -43,55 +43,18 @@ function resetState(chatId: number) {
   sessions.set(chatId, { step: "idle", data: {} });
 }
 
-// ─── Keyboards ────────────────────────────────────────────────────────────────
-const MAIN_KEYBOARD: TelegramBot.SendMessageOptions = {
-  reply_markup: {
-    keyboard: [
-      [{ text: "➕ Obunachi qo'shish" }, { text: "👥 Obunachilar" }],
-      [{ text: "💰 Moliya" }, { text: "📊 Statistika" }],
-    ],
-    resize_keyboard: true,
-    persistent: true,
-  },
-};
-
-function subscribersMenu(): TelegramBot.SendMessageOptions {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "📋 Barchasi", callback_data: "subs_all" },
-          { text: "✅ Faol", callback_data: "subs_active" },
-        ],
-        [{ text: "⚠️ Qarzdorlar", callback_data: "subs_overdue" }],
-      ],
-    },
-  };
-}
-
-function financeMenu(): TelegramBot.SendMessageOptions {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "📅 Oylik hisobot", callback_data: "fin_monthly" }],
-        [{ text: "💵 Daromad (jami)", callback_data: "fin_total" }],
-        [{ text: "💳 To'lov qabul qilish", callback_data: "fin_pay" }],
-      ],
-    },
-  };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function isAdmin(chatId: number): boolean {
-  const adminId = process.env.ADMIN_TELEGRAM_CHAT_ID;
-  return adminId === String(chatId);
+  return process.env.ADMIN_TELEGRAM_CHAT_ID === String(chatId);
 }
 
 async function getPlans() {
   return db.select().from(plansTable).where(eq(plansTable.isActive, true));
 }
 
-function formatSubscriber(sub: typeof subscribersTable.$inferSelect & { planName?: string | null }) {
+function formatSubscriberCard(
+  sub: typeof subscribersTable.$inferSelect & { planName?: string | null }
+): string {
   const statusLabel: Record<string, string> = {
     active: "✅ Faol",
     expired: "❌ Muddati tugagan",
@@ -100,28 +63,117 @@ function formatSubscriber(sub: typeof subscribersTable.$inferSelect & { planName
   };
   const payLabel: Record<string, string> = {
     paid: "✅ To'langan",
-    pending: "⚠️ Kutilmoqda",
-    overdue: "❌ Qarzdor",
+    pending: "⚠️ To'lanmagan (qarz)",
+    overdue: "❌ Muddati o'tgan",
   };
-  const daysLeft = sub.daysLeft ?? 0;
+  const daysLeft = Math.floor(
+    (new Date(sub.endDate).getTime() - Date.now()) / 86400000
+  );
+  const daysText =
+    daysLeft > 0 ? `*${daysLeft} kun* qoldi` : "⚠️ Muddati tugagan";
+
   return (
     `👤 *${sub.firstName} ${sub.lastName}*\n` +
     `📞 ${sub.phone}\n` +
     `💎 Reja: ${sub.planName ?? "—"}\n` +
     `📅 ${sub.startDate} → ${sub.endDate}\n` +
-    `🗓 Qolgan: *${daysLeft > 0 ? daysLeft + " kun" : "Tugagan"}*\n` +
+    `🗓 Qolgan: ${daysText}\n` +
     `💳 To'lov: ${payLabel[sub.paymentStatus] ?? sub.paymentStatus}\n` +
     `📌 Holat: ${statusLabel[sub.status] ?? sub.status}`
   );
 }
 
-// ─── Subscriber list ──────────────────────────────────────────────────────────
-async function sendSubscriberList(
-  chatId: number,
-  filter: "all" | "active" | "overdue"
-) {
-  const today = new Date().toISOString().split("T")[0];
+// ─── Member info by telegramChatId ────────────────────────────────────────────
+async function getLinkedSubscriber(chatId: number) {
+  const rows = await db
+    .select({ sub: subscribersTable, planName: plansTable.name })
+    .from(subscribersTable)
+    .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
+    .where(eq(subscribersTable.telegramChatId, String(chatId)));
+  return rows[0] ?? null;
+}
 
+async function showMemberInfo(chatId: number) {
+  const row = await getLinkedSubscriber(chatId);
+  if (!row) {
+    await bot!.sendMessage(
+      chatId,
+      `❓ Hisobingiz topilmadi.\n\n📞 Telefon raqamingizni yuboring (masalan: +998901234567):`,
+      { reply_markup: { force_reply: true } }
+    );
+    getState(chatId).step = "member_phone";
+    return;
+  }
+  const sub = { ...row.sub, planName: row.planName };
+  const daysLeft = Math.floor(
+    (new Date(sub.endDate).getTime() - Date.now()) / 86400000
+  );
+
+  let extra = "";
+  if (daysLeft <= 0) {
+    extra = `\n\n⚠️ *Obunangiz tugagan!* Iltimos, to'lov qiling.`;
+  } else if (daysLeft <= 5) {
+    extra = `\n\n⏰ *Diqqat:* ${daysLeft} kun qoldi. To'lovni kechiktirmang!`;
+  } else if (sub.paymentStatus === "pending" || sub.paymentStatus === "overdue") {
+    extra = `\n\n⚠️ *To'lov qilinmagan!* Iltimos, to'lovingizni amalga oshiring.`;
+  }
+
+  await bot!.sendMessage(chatId, `${formatSubscriberCard(sub)}${extra}`, {
+    parse_mode: "Markdown",
+    reply_markup: {
+      keyboard: [[{ text: "📊 Ma'lumotlarim" }]],
+      resize_keyboard: true,
+      persistent: true,
+    },
+  });
+}
+
+async function linkMemberByPhone(chatId: number, phone: string) {
+  const clean = phone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+  const rows = await db
+    .select({ sub: subscribersTable, planName: plansTable.name })
+    .from(subscribersTable)
+    .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
+    .where(ilike(subscribersTable.phone, `%${clean}%`));
+
+  if (rows.length === 0) {
+    await bot!.sendMessage(
+      chatId,
+      `❌ *${phone}* raqami bilan ro'yxatdan o'tilmagan.\n\n` +
+        `Telefon raqamingizni to'g'ri kiriting yoki admin bilan bog'laning:`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: { force_reply: true },
+      }
+    );
+    return;
+  }
+
+  const { sub, planName } = rows[0];
+  await db
+    .update(subscribersTable)
+    .set({ telegramChatId: String(chatId), updatedAt: new Date() })
+    .where(eq(subscribersTable.id, sub.id));
+
+  const updated = { ...sub, telegramChatId: String(chatId), planName };
+  resetState(chatId);
+  await bot!.sendMessage(
+    chatId,
+    `✅ *Hisobingiz ulandi!*\n\n${formatSubscriberCard(updated)}`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        keyboard: [[{ text: "📊 Ma'lumotlarim" }]],
+        resize_keyboard: true,
+        persistent: true,
+      },
+    }
+  );
+  logger.info({ chatId, subscriberId: sub.id }, "Member linked via phone");
+}
+
+// ─── Admin: subscriber list ───────────────────────────────────────────────────
+async function sendSubscriberList(chatId: number, filter: "all" | "active" | "overdue") {
   let rows;
   if (filter === "active") {
     rows = await db
@@ -160,46 +212,29 @@ async function sendSubscriberList(
       ? "⚠️ *Qarzdor a'zolar*"
       : "📋 *Barcha a'zolar*";
 
-  const list = rows
-    .map(
-      ({ sub, planName }, i) =>
-        `${i + 1}. *${sub.firstName} ${sub.lastName}* — ${sub.phone} | ${planName ?? "—"}`
-    )
-    .join("\n");
+  const lines = rows.map(
+    ({ sub, planName }, i) =>
+      `${i + 1}. *${sub.firstName} ${sub.lastName}* — ${sub.phone} | ${planName ?? "—"}\n`
+  );
 
-  const message = `${title} (${rows.length} ta)\n\n${list}`;
-
-  // Telegram has 4096 char limit — chunk if needed
-  if (message.length <= 4000) {
-    await bot!.sendMessage(chatId, message, { parse_mode: "Markdown" });
-  } else {
-    const chunks: string[] = [];
-    let chunk = `${title} (${rows.length} ta)\n\n`;
-    for (const line of rows.map(
-      ({ sub, planName }, i) =>
-        `${i + 1}. *${sub.firstName} ${sub.lastName}* — ${sub.phone} | ${planName ?? "—"}\n`
-    )) {
-      if (chunk.length + line.length > 3900) {
-        chunks.push(chunk);
-        chunk = "";
-      }
-      chunk += line;
+  let chunk = `${title} (${rows.length} ta)\n\n`;
+  for (const line of lines) {
+    if (chunk.length + line.length > 3900) {
+      await bot!.sendMessage(chatId, chunk, { parse_mode: "Markdown" });
+      chunk = "";
     }
-    if (chunk) chunks.push(chunk);
-    for (const c of chunks) {
-      await bot!.sendMessage(chatId, c, { parse_mode: "Markdown" });
-    }
+    chunk += line;
   }
+  if (chunk) await bot!.sendMessage(chatId, chunk, { parse_mode: "Markdown" });
 }
 
-// ─── Monthly report ───────────────────────────────────────────────────────────
+// ─── Admin: finance ───────────────────────────────────────────────────────────
 async function sendMonthlyReport(chatId: number) {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const monthStart = `${year}-${month}-01`;
-  const nextMonth = new Date(year, now.getMonth() + 1, 1);
-  const monthEnd = nextMonth.toISOString().split("T")[0];
+  const monthEnd = new Date(year, now.getMonth() + 1, 1).toISOString().split("T")[0];
 
   const payments = await db
     .select()
@@ -212,35 +247,26 @@ async function sendMonthlyReport(chatId: number) {
       )
     );
 
-  const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-  const activeCount = await db
+  const total = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const [active] = await db
     .select({ count: sql<number>`count(*)` })
     .from(subscribersTable)
     .where(eq(subscribersTable.status, "active"));
 
-  const monthNames = [
-    "Yanvar","Fevral","Mart","Aprel","May","Iyun",
-    "Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr",
-  ];
-
+  const monthNames = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
   await bot!.sendMessage(
     chatId,
     `📅 *${monthNames[now.getMonth()]} ${year} — Oylik hisobot*\n\n` +
-      `💰 Jami daromad: *${total.toLocaleString("uz")} so'm*\n` +
-      `✅ Tasdiqlangan to'lovlar: *${payments.length} ta*\n` +
-      `👥 Faol a'zolar: *${activeCount[0]?.count ?? 0} ta*`,
+      `💰 Daromad: *${total.toLocaleString("uz")} so'm*\n` +
+      `✅ To'lovlar: *${payments.length} ta*\n` +
+      `👥 Faol a'zolar: *${active?.count ?? 0} ta*`,
     { parse_mode: "Markdown" }
   );
 }
 
-// ─── Total revenue ────────────────────────────────────────────────────────────
 async function sendTotalRevenue(chatId: number) {
-  const payments = await db
-    .select()
-    .from(paymentsTable)
-    .where(eq(paymentsTable.status, "confirmed"));
-
-  const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const payments = await db.select().from(paymentsTable).where(eq(paymentsTable.status, "confirmed"));
+  const total = payments.reduce((s, p) => s + Number(p.amount), 0);
   const [stats] = await db
     .select({
       total: sql<number>`count(*)`,
@@ -252,63 +278,13 @@ async function sendTotalRevenue(chatId: number) {
     chatId,
     `💵 *Umumiy daromad*\n\n` +
       `💰 Jami: *${total.toLocaleString("uz")} so'm*\n` +
-      `🧾 To'lovlar soni: *${payments.length} ta*\n` +
+      `🧾 To'lovlar: *${payments.length} ta*\n` +
       `👥 Jami a'zolar: *${stats?.total ?? 0} ta*\n` +
-      `✅ Faol a'zolar: *${stats?.active ?? 0} ta*`,
+      `✅ Faol: *${stats?.active ?? 0} ta*`,
     { parse_mode: "Markdown" }
   );
 }
 
-// ─── Accept payment flow ──────────────────────────────────────────────────────
-async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
-  const clean = phone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
-
-  const rows = await db
-    .select({ sub: subscribersTable, planName: plansTable.name })
-    .from(subscribersTable)
-    .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
-    .where(ilike(subscribersTable.phone, `%${clean}%`));
-
-  if (rows.length === 0) {
-    await bot!.sendMessage(
-      chatId,
-      `❌ *${phone}* raqamli a'zo topilmadi.\n\nQaytadan kiriting yoki /bekor buyrug'ini yuboring.`,
-      { parse_mode: "Markdown" }
-    );
-    return;
-  }
-
-  const { sub, planName } = rows[0];
-  const plan = await db
-    .select()
-    .from(plansTable)
-    .where(eq(plansTable.id, sub.planId));
-
-  const subWithPlan = { ...sub, planName, daysLeft: Math.floor((new Date(sub.endDate).getTime() - Date.now()) / 86400000) };
-
-  const planButtons = plan.map((p) => [
-    {
-      text: `💳 ${p.name} — ${Number(p.price).toLocaleString("uz")} so'm`,
-      callback_data: `pay_confirm_${sub.id}_${p.id}_${p.price}`,
-    },
-  ]);
-
-  await bot!.sendMessage(
-    chatId,
-    `${formatSubscriber(subWithPlan)}\n\n📌 *Qaysi reja uchun to'lov qabul qilasiz?*`,
-    {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          ...planButtons,
-          [{ text: "❌ Bekor qilish", callback_data: "pay_cancel" }],
-        ],
-      },
-    }
-  );
-}
-
-// ─── Stats ────────────────────────────────────────────────────────────────────
 async function sendStats(chatId: number) {
   const [stats] = await db
     .select({
@@ -318,8 +294,7 @@ async function sendStats(chatId: number) {
       overdue: sql<number>`sum(case when payment_status in ('overdue','pending') then 1 else 0 end)`,
     })
     .from(subscribersTable);
-
-  const [revenue] = await db
+  const [rev] = await db
     .select({ total: sql<number>`coalesce(sum(amount::numeric),0)` })
     .from(paymentsTable)
     .where(eq(paymentsTable.status, "confirmed"));
@@ -331,12 +306,133 @@ async function sendStats(chatId: number) {
       `✅ Faol: *${stats?.active ?? 0} ta*\n` +
       `❌ Tugagan: *${stats?.expired ?? 0} ta*\n` +
       `⚠️ Qarzdor: *${stats?.overdue ?? 0} ta*\n\n` +
-      `💰 Jami daromad: *${Number(revenue?.total ?? 0).toLocaleString("uz")} so'm*`,
+      `💰 Jami daromad: *${Number(rev?.total ?? 0).toLocaleString("uz")} so'm*`,
     { parse_mode: "Markdown" }
   );
 }
 
-// ─── Bot initialization ───────────────────────────────────────────────────────
+// ─── Admin: payment search ────────────────────────────────────────────────────
+async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
+  const clean = phone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+  const rows = await db
+    .select({ sub: subscribersTable, planName: plansTable.name })
+    .from(subscribersTable)
+    .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
+    .where(ilike(subscribersTable.phone, `%${clean}%`));
+
+  if (rows.length === 0) {
+    await bot!.sendMessage(
+      chatId,
+      `❌ *${phone}* raqamli a'zo topilmadi.\n\nQaytadan kiriting:`,
+      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+    );
+    getState(chatId).step = "pay_phone";
+    return;
+  }
+
+  const { sub, planName } = rows[0];
+  const plans = await getPlans();
+  const subWithPlan = {
+    ...sub,
+    planName,
+    daysLeft: Math.floor((new Date(sub.endDate).getTime() - Date.now()) / 86400000),
+  };
+
+  await bot!.sendMessage(
+    chatId,
+    `${formatSubscriberCard(subWithPlan)}\n\n📌 *Qaysi reja uchun to'lov qabul qilasiz?*`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          ...plans.map((p) => [
+            {
+              text: `💳 ${p.name} — ${Number(p.price).toLocaleString("uz")} so'm`,
+              callback_data: `pay_confirm_${sub.id}_${p.id}_${p.price}`,
+            },
+          ]),
+          [{ text: "❌ Bekor qilish", callback_data: "pay_cancel" }],
+        ],
+      },
+    }
+  );
+}
+
+// ─── Keyboards ────────────────────────────────────────────────────────────────
+const ADMIN_KEYBOARD: TelegramBot.SendMessageOptions = {
+  reply_markup: {
+    keyboard: [
+      [{ text: "➕ Obunachi qo'shish" }, { text: "👥 Obunachilar" }],
+      [{ text: "💰 Moliya" }, { text: "📊 Statistika" }],
+    ],
+    resize_keyboard: true,
+    persistent: true,
+  },
+};
+
+const MEMBER_KEYBOARD: TelegramBot.SendMessageOptions = {
+  reply_markup: {
+    keyboard: [[{ text: "📊 Ma'lumotlarim" }]],
+    resize_keyboard: true,
+    persistent: true,
+  },
+};
+
+function subscribersMenu(): TelegramBot.SendMessageOptions {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "📋 Barchasi", callback_data: "subs_all" },
+          { text: "✅ Faol", callback_data: "subs_active" },
+        ],
+        [{ text: "⚠️ Qarzdorlar", callback_data: "subs_overdue" }],
+      ],
+    },
+  };
+}
+
+function financeMenu(): TelegramBot.SendMessageOptions {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "📅 Oylik hisobot", callback_data: "fin_monthly" }],
+        [{ text: "💵 Daromad (jami)", callback_data: "fin_total" }],
+        [{ text: "💳 To'lov qabul qilish", callback_data: "fin_pay" }],
+      ],
+    },
+  };
+}
+
+// ─── Notify a subscriber via Telegram ────────────────────────────────────────
+export async function notifySubscriber(subscriberId: number, message: string): Promise<void> {
+  if (!bot) return;
+  try {
+    const [sub] = await db
+      .select({ telegramChatId: subscribersTable.telegramChatId })
+      .from(subscribersTable)
+      .where(eq(subscribersTable.id, subscriberId));
+    if (sub?.telegramChatId) {
+      await bot.sendMessage(sub.telegramChatId, message, { parse_mode: "Markdown" });
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to notify subscriber");
+  }
+}
+
+// ─── Admin notification ───────────────────────────────────────────────────────
+export async function sendAdminNotification(message: string): Promise<void> {
+  if (!bot) return;
+  const adminChatId = process.env.ADMIN_TELEGRAM_CHAT_ID;
+  if (!adminChatId) return;
+  try {
+    await bot.sendMessage(adminChatId, message, { parse_mode: "Markdown" });
+  } catch (err) {
+    logger.error({ err }, "Failed to send admin notification");
+  }
+}
+
+// ─── Bot init ─────────────────────────────────────────────────────────────────
 export function initTelegramBot(): TelegramBot | null {
   if (!TOKEN) {
     logger.warn("TELEGRAM_BOT_TOKEN not set — Telegram bot disabled");
@@ -351,35 +447,66 @@ export function initTelegramBot(): TelegramBot | null {
       const chatId = msg.chat.id;
       const text = (msg.text || "").trim();
       const state = getState(chatId);
+      const admin = isAdmin(chatId);
 
-      if (!isAdmin(chatId) && text !== "/start" && text !== "/chatid") {
-        await bot!.sendMessage(chatId, "⛔ Sizda ruxsat yo'q.");
-        return;
-      }
-
-      // /start or /chatid
-      if (text === "/start" || text === "/chatid") {
+      // ── /start ─────────────────────────────────────────────────────────────
+      if (text === "/start") {
         resetState(chatId);
-        const isAdm = isAdmin(chatId);
-        await bot!.sendMessage(
-          chatId,
-          isAdm
-            ? `💎 *OLMOS FITNESS Admin Bot*\n\nXush kelibsiz! Quyidagi tugmalardan foydalaning.`
-            : `✅ Sizning Chat ID: \`${chatId}\`\n\nBu ID ni admin paneliga kiriting.`,
-          { parse_mode: "Markdown", ...(isAdm ? MAIN_KEYBOARD : {}) }
-        );
-        logger.info({ chatId }, isAdm ? "Admin opened bot" : "User requested chat ID");
+        if (admin) {
+          await bot!.sendMessage(
+            chatId,
+            `💎 *OLMOS FITNESS Admin Bot*\n\nXush kelibsiz, admin! Tugmalardan foydalaning.`,
+            { parse_mode: "Markdown", ...ADMIN_KEYBOARD }
+          );
+        } else {
+          // Member flow: check if already linked
+          const linked = await getLinkedSubscriber(chatId);
+          if (linked) {
+            await showMemberInfo(chatId);
+          } else {
+            state.step = "member_phone";
+            await bot!.sendMessage(
+              chatId,
+              `💎 *OLMOS FITNESS*\n\nXush kelibsiz! Hisobingizga kirish uchun *telefon raqamingizni* yuboring:`,
+              { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+            );
+          }
+        }
+        logger.info({ chatId, admin }, "User started bot");
         return;
       }
 
-      // /bekor — cancel
+      // /chatid — for linking admin
+      if (text === "/chatid") {
+        await bot!.sendMessage(chatId, `🆔 Sizning Chat ID: \`${chatId}\``, {
+          parse_mode: "Markdown",
+        });
+        return;
+      }
+
+      // ── Member flow ────────────────────────────────────────────────────────
+      if (!admin) {
+        if (state.step === "member_phone") {
+          await linkMemberByPhone(chatId, text);
+          return;
+        }
+        if (text === "📊 Ma'lumotlarim") {
+          await showMemberInfo(chatId);
+          return;
+        }
+        // Unknown message from member — show their info
+        await showMemberInfo(chatId);
+        return;
+      }
+
+      // ── Admin: cancel ──────────────────────────────────────────────────────
       if (text === "/bekor" || text === "❌ Bekor") {
         resetState(chatId);
-        await bot!.sendMessage(chatId, "✅ Bekor qilindi.", MAIN_KEYBOARD);
+        await bot!.sendMessage(chatId, "✅ Bekor qilindi.", ADMIN_KEYBOARD);
         return;
       }
 
-      // ── Step-based conversation ─────────────────────────────────────────────
+      // ── Admin: step-based conversation ─────────────────────────────────────
       if (state.step === "add_first_name") {
         state.data.firstName = text;
         state.step = "add_last_name";
@@ -417,11 +544,10 @@ export function initTelegramBot(): TelegramBot | null {
 
       if (state.step === "pay_phone") {
         await findAndShowSubscriberByPhone(chatId, text);
-        resetState(chatId);
         return;
       }
 
-      // ── Main menu buttons ───────────────────────────────────────────────────
+      // ── Admin: main menu buttons ───────────────────────────────────────────
       if (text === "➕ Obunachi qo'shish") {
         state.step = "add_first_name";
         state.data = {};
@@ -453,8 +579,7 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
 
-      // Fallback
-      await bot!.sendMessage(chatId, "Tugmalardan birini tanlang 👇", MAIN_KEYBOARD);
+      await bot!.sendMessage(chatId, "Tugmalardan birini tanlang 👇", ADMIN_KEYBOARD);
     });
 
     // ── Callback query handler ───────────────────────────────────────────────
@@ -462,32 +587,16 @@ export function initTelegramBot(): TelegramBot | null {
       const chatId = query.message!.chat.id;
       const data = query.data || "";
       const state = getState(chatId);
-
       await bot!.answerCallbackQuery(query.id);
 
-      // Subscriber filters
-      if (data === "subs_all") {
-        await sendSubscriberList(chatId, "all");
-        return;
-      }
-      if (data === "subs_active") {
-        await sendSubscriberList(chatId, "active");
-        return;
-      }
-      if (data === "subs_overdue") {
-        await sendSubscriberList(chatId, "overdue");
-        return;
-      }
+      // Subscriber list filters
+      if (data === "subs_all") { await sendSubscriberList(chatId, "all"); return; }
+      if (data === "subs_active") { await sendSubscriberList(chatId, "active"); return; }
+      if (data === "subs_overdue") { await sendSubscriberList(chatId, "overdue"); return; }
 
       // Finance
-      if (data === "fin_monthly") {
-        await sendMonthlyReport(chatId);
-        return;
-      }
-      if (data === "fin_total") {
-        await sendTotalRevenue(chatId);
-        return;
-      }
+      if (data === "fin_monthly") { await sendMonthlyReport(chatId); return; }
+      if (data === "fin_total") { await sendTotalRevenue(chatId); return; }
       if (data === "fin_pay") {
         state.step = "pay_phone";
         state.data = {};
@@ -499,49 +608,42 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
 
-      // Plan selection during subscriber add — ask payment status next
+      // Plan selection → ask payment status
       if (data.startsWith("plan_") && state.step === "add_plan") {
         const planId = parseInt(data.replace("plan_", ""));
         state.data.planId = planId;
         state.step = "add_payment_status";
-
         const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-        const planName = plan?.name ?? "—";
-        const planPrice = plan ? Number(plan.price).toLocaleString("uz") : "—";
-
         await bot!.sendMessage(
           chatId,
-          `💎 Reja: *${planName}* (${planPrice} so'm)\n\n💳 *To'lov holati qanday?*`,
+          `💎 Reja: *${plan?.name}* (${Number(plan?.price ?? 0).toLocaleString("uz")} so'm)\n\n💳 *To'lov holati qanday?*`,
           {
             parse_mode: "Markdown",
             reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: "✅ To'landi", callback_data: "ps_paid" },
-                  { text: "⚠️ Qarz", callback_data: "ps_debt" },
-                ],
-              ],
+              inline_keyboard: [[
+                { text: "✅ To'landi", callback_data: "ps_paid" },
+                { text: "⚠️ Qarz", callback_data: "ps_debt" },
+              ]],
             },
           }
         );
         return;
       }
 
-      // Payment status selection — finalize subscriber creation
+      // Payment status → save subscriber
       if (data === "ps_paid" || data === "ps_debt") {
         const paymentStatus = data === "ps_paid" ? "paid" : "pending";
         const { firstName, lastName, phone, planId } = state.data as Record<string, string>;
 
         if (!firstName || !lastName || !phone || !planId) {
-          await bot!.sendMessage(chatId, "❌ Ma'lumotlar to'liq emas. Qaytadan boshlang.", MAIN_KEYBOARD);
+          await bot!.sendMessage(chatId, "❌ Ma'lumotlar to'liq emas. Qaytadan boshlang.", ADMIN_KEYBOARD);
           resetState(chatId);
           return;
         }
 
         const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, Number(planId)));
-
         if (!plan) {
-          await bot!.sendMessage(chatId, "❌ Reja topilmadi.", MAIN_KEYBOARD);
+          await bot!.sendMessage(chatId, "❌ Reja topilmadi.", ADMIN_KEYBOARD);
           resetState(chatId);
           return;
         }
@@ -553,27 +655,14 @@ export function initTelegramBot(): TelegramBot | null {
 
         const [newSub] = await db
           .insert(subscribersTable)
-          .values({
-            firstName,
-            lastName,
-            phone,
-            planId: Number(planId),
-            startDate: today,
-            endDate: endDateStr,
-            paymentStatus,
-            status: "active",
-          })
+          .values({ firstName, lastName, phone, planId: Number(planId), startDate: today, endDate: endDateStr, paymentStatus, status: "active" })
           .returning();
 
-        // If paid — also create a confirmed payment record
         if (paymentStatus === "paid") {
           await db.insert(paymentsTable).values({
-            subscriberId: newSub.id,
-            planId: Number(planId),
-            amount: String(plan.price),
-            paymentDate: today,
-            status: "confirmed",
-            extendSubscription: false,
+            subscriberId: newSub.id, planId: Number(planId),
+            amount: String(plan.price), paymentDate: today,
+            status: "confirmed", extendSubscription: false,
           });
         }
 
@@ -583,19 +672,15 @@ export function initTelegramBot(): TelegramBot | null {
           subscriberName: `${firstName} ${lastName}`,
         });
 
-        const payLabel = paymentStatus === "paid" ? "✅ To'landi" : "⚠️ Qarz";
-
         resetState(chatId);
         await bot!.sendMessage(
           chatId,
-          `✅ *A'zo muvaffaqiyatli qo'shildi!*\n\n` +
-            `👤 ${firstName} ${lastName}\n` +
-            `📞 ${phone}\n` +
-            `💎 Reja: ${plan.name} — ${Number(plan.price).toLocaleString("uz")} so'm\n` +
+          `✅ *A'zo qo'shildi!*\n\n` +
+            `👤 ${firstName} ${lastName}\n📞 ${phone}\n` +
+            `💎 ${plan.name} — ${Number(plan.price).toLocaleString("uz")} so'm\n` +
             `📅 ${today} → ${endDateStr}\n` +
-            `💳 To'lov: ${payLabel}\n` +
-            `🔢 ID: ${newSub.id}`,
-          { parse_mode: "Markdown", ...MAIN_KEYBOARD }
+            `💳 ${paymentStatus === "paid" ? "✅ To'landi" : "⚠️ Qarz"}\n🔢 ID: ${newSub.id}`,
+          { parse_mode: "Markdown", ...ADMIN_KEYBOARD }
         );
         return;
       }
@@ -606,64 +691,60 @@ export function initTelegramBot(): TelegramBot | null {
         const subId = parseInt(parts[2]);
         const planId = parseInt(parts[3]);
         const price = parts[4];
-
         const today = new Date().toISOString().split("T")[0];
+
         const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
         const [sub] = await db.select().from(subscribersTable).where(eq(subscribersTable.id, subId));
-
         if (!plan || !sub) {
-          await bot!.sendMessage(chatId, "❌ Ma'lumot topilmadi.", MAIN_KEYBOARD);
+          await bot!.sendMessage(chatId, "❌ Ma'lumot topilmadi.", ADMIN_KEYBOARD);
           return;
         }
 
-        // Create confirmed payment
         await db.insert(paymentsTable).values({
-          subscriberId: subId,
-          planId,
-          amount: price,
-          paymentDate: today,
-          status: "confirmed",
-          extendSubscription: true,
+          subscriberId: subId, planId, amount: price,
+          paymentDate: today, status: "confirmed", extendSubscription: true,
         });
 
-        // Extend subscription
         const currentEnd = new Date(sub.endDate);
         const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()));
         newEnd.setDate(newEnd.getDate() + plan.durationDays);
         const newEndStr = newEnd.toISOString().split("T")[0];
 
-        await db
-          .update(subscribersTable)
-          .set({
-            endDate: newEndStr,
-            status: "active",
-            paymentStatus: "paid",
-            updatedAt: new Date(),
-          })
+        await db.update(subscribersTable)
+          .set({ endDate: newEndStr, status: "active", paymentStatus: "paid", updatedAt: new Date() })
           .where(eq(subscribersTable.id, subId));
 
         await db.insert(notificationsTable).values({
           message: `To'lov tasdiqlandi (bot orqali): ${sub.firstName} ${sub.lastName} — ${plan.name}`,
-          type: "payment_confirmed",
-          subscriberId: subId,
+          type: "payment_confirmed", subscriberId: subId,
           subscriberName: `${sub.firstName} ${sub.lastName}`,
         });
 
+        // Notify the member if they have Telegram linked
+        if (sub.telegramChatId) {
+          await bot!.sendMessage(
+            sub.telegramChatId,
+            `✅ *To'lovingiz qabul qilindi!*\n\n` +
+              `💎 Reja: ${plan.name}\n` +
+              `💰 Miqdor: ${Number(price).toLocaleString("uz")} so'm\n` +
+              `📅 Obuna muddati: ${newEndStr} gacha`,
+            { parse_mode: "Markdown", ...MEMBER_KEYBOARD }
+          );
+        }
+
+        resetState(chatId);
         await bot!.sendMessage(
           chatId,
-          `✅ *To'lov qabul qilindi!*\n\n` +
-            `👤 ${sub.firstName} ${sub.lastName}\n` +
-            `💎 Reja: ${plan.name}\n` +
-            `💰 Miqdor: ${Number(price).toLocaleString("uz")} so'm\n` +
-            `📅 Yangi muddat: ${newEndStr}`,
-          { parse_mode: "Markdown", ...MAIN_KEYBOARD }
+          `✅ *To'lov qabul qilindi!*\n\n👤 ${sub.firstName} ${sub.lastName}\n` +
+            `💎 ${plan.name}\n💰 ${Number(price).toLocaleString("uz")} so'm\n📅 → ${newEndStr}`,
+          { parse_mode: "Markdown", ...ADMIN_KEYBOARD }
         );
         return;
       }
 
       if (data === "pay_cancel") {
         resetState(chatId);
-        await bot!.sendMessage(chatId, "✅ Bekor qilindi.", MAIN_KEYBOARD);
+        await bot!.sendMessage(chatId, "✅ Bekor qilindi.", ADMIN_KEYBOARD);
         return;
       }
     });
@@ -677,19 +758,5 @@ export function initTelegramBot(): TelegramBot | null {
   } catch (err) {
     logger.error({ err }, "Failed to start Telegram bot");
     return null;
-  }
-}
-
-export async function sendAdminNotification(message: string): Promise<void> {
-  if (!bot) return;
-  const adminChatId = process.env.ADMIN_TELEGRAM_CHAT_ID;
-  if (!adminChatId) {
-    logger.warn("ADMIN_TELEGRAM_CHAT_ID not set — notification skipped");
-    return;
-  }
-  try {
-    await bot.sendMessage(adminChatId, message, { parse_mode: "Markdown" });
-  } catch (err) {
-    logger.error({ err }, "Failed to send Telegram notification");
   }
 }
