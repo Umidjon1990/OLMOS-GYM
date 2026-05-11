@@ -17,6 +17,7 @@ export * from "./listApplicationsParams";
 export * from "./listApplicationsStatus";
 export * from "./listNotificationsParams";
 export * from "./listSubscribersParams";
+export * from "./listSubscribersPaymentStatus";
 export * from "./listSubscribersStatus";
 export * from "./notification";
 export * from "./notificationType";

@@ -5,6 +5,7 @@
  * Gym CRM API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ListSubscribersPaymentStatus } from "./listSubscribersPaymentStatus";
 import type { ListSubscribersStatus } from "./listSubscribersStatus";
 
 export type ListSubscribersParams = {
@@ -14,4 +15,5 @@ export type ListSubscribersParams = {
    */
   planId?: number | null;
   search?: string;
+  paymentStatus?: ListSubscribersPaymentStatus;
 };

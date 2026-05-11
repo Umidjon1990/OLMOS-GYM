@@ -31,6 +31,7 @@ router.get("/", async (req, res) => {
     const conditions = [];
     if (query.status) conditions.push(eq(subscribersTable.status, query.status));
     if (query.planId) conditions.push(eq(subscribersTable.planId, Number(query.planId)));
+    if (query.paymentStatus) conditions.push(eq(subscribersTable.paymentStatus, query.paymentStatus));
     if (query.search) {
       conditions.push(
         or(

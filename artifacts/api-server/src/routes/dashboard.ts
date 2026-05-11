@@ -28,6 +28,9 @@ router.get("/stats", async (req, res) => {
     const [pendingPaymentRes] = await db.select({ count: count() }).from(subscribersTable).where(
       eq(subscribersTable.paymentStatus, "pending")
     );
+    const [pendingPaymentsCountRes] = await db.select({ count: count() }).from(paymentsTable).where(
+      eq(paymentsTable.status, "pending")
+    );
     const [revenueRes] = await db.select({ total: sum(paymentsTable.amount) }).from(paymentsTable).where(
       eq(paymentsTable.status, "confirmed")
     );
@@ -51,6 +54,7 @@ router.get("/stats", async (req, res) => {
       expiredSubscribers: expiredRes.count,
       expiringSoon: expiringSoonRes.count,
       pendingPayment: pendingPaymentRes.count,
+      pendingPaymentsCount: pendingPaymentsCountRes.count,
       totalRevenue: parseFloat(String(revenueRes.total ?? 0)),
       newApplications: newAppsRes.count,
       planBreakdown: planBreakdown.map(p => ({

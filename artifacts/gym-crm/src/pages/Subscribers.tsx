@@ -1,7 +1,7 @@
 import { useListSubscribers, getListSubscribersQueryKey } from "@workspace/api-client-react";
 import { Search, Plus, UserX, Clock, CreditCard } from "lucide-react";
-import { useState } from "react";
-import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { Link, useSearch } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,13 +10,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Subscribers() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const searchStr = useSearch();
+  const params = new URLSearchParams(searchStr);
 
-  const { data: subscribers, isLoading } = useListSubscribers(
-    { search: search.length > 2 ? search : undefined, status: statusFilter !== "all" ? statusFilter as any : undefined },
-    { query: { queryKey: getListSubscribersQueryKey({ search: search.length > 2 ? search : undefined, status: statusFilter !== "all" ? statusFilter as any : undefined }) } }
-  );
+  // Initialize filter from URL params
+  const urlStatus = params.get("status") ?? "all";
+  const urlPayment = params.get("payment") ?? "";
+  const urlExpiring = params.get("filter") === "expiring";
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus);
+  const [paymentFilter, setPaymentFilter] = useState<string>(urlPayment);
+
+  // Sync when URL changes (e.g. navigating from dashboard)
+  useEffect(() => {
+    setStatusFilter(urlStatus);
+    setPaymentFilter(urlPayment);
+  }, [urlStatus, urlPayment]);
+
+  const queryParams = {
+    search: search.length > 2 ? search : undefined,
+    status: statusFilter !== "all" ? (statusFilter as any) : undefined,
+    paymentStatus: (paymentFilter || undefined) as any,
+  };
+
+  const { data: subscribers, isLoading } = useListSubscribers(queryParams, {
+    query: { queryKey: getListSubscribersQueryKey(queryParams) },
+  });
+
+  // Client-side filter for "expiring soon" (3 days)
+  const filtered = urlExpiring && !paymentFilter
+    ? (subscribers ?? []).filter(s => s.daysLeft >= 0 && s.daysLeft <= 3)
+    : subscribers;
 
   const getStatusLabel = (status: string) => {
     switch(status) {
@@ -41,7 +66,7 @@ export default function Subscribers() {
   const getPaymentLabel = (status: string) => {
     switch(status) {
       case 'paid': return "To'langan";
-      case 'pending': return "Kutilmoqda";
+      case 'pending': return "Qarz";
       case 'overdue': return "Muddati o'tgan";
       default: return status;
     }
@@ -56,6 +81,15 @@ export default function Subscribers() {
     }
   };
 
+  // Banner for active filter from dashboard
+  const activeBanner = urlExpiring
+    ? "⏰ Yaqin orada tugaydiganlar (3 kun)"
+    : paymentFilter === "pending"
+    ? "⚠️ Qarzdorlar ro'yxati"
+    : statusFilter === "active"
+    ? "✅ Faol a'zolar"
+    : null;
+
   return (
     <div className="p-4 md:p-8 space-y-5 pb-24 md:pb-8 relative min-h-screen">
       <div className="flex items-center justify-between">
@@ -67,6 +101,12 @@ export default function Subscribers() {
         </Link>
       </div>
 
+      {activeBanner && (
+        <div className="text-sm font-semibold text-primary bg-primary/10 px-4 py-2 rounded-lg border border-primary/20">
+          {activeBanner}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 sticky top-14 md:top-0 bg-background/95 z-20 py-2 backdrop-blur">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -77,7 +117,7 @@ export default function Subscribers() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
           <SelectTrigger className="w-full sm:w-[180px] h-11">
             <SelectValue placeholder="Holat" />
           </SelectTrigger>
@@ -95,7 +135,7 @@ export default function Subscribers() {
         <div className="space-y-3">
           {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
         </div>
-      ) : subscribers?.length === 0 ? (
+      ) : filtered?.length === 0 ? (
         <div className="text-center py-20 flex flex-col items-center">
           <UserX className="h-16 w-16 text-muted-foreground/30 mb-4" />
           <h3 className="text-lg font-semibold">A'zo topilmadi</h3>
@@ -103,7 +143,7 @@ export default function Subscribers() {
         </div>
       ) : (
         <div className="space-y-3">
-          {subscribers?.map(sub => (
+          {filtered?.map(sub => (
             <Link key={sub.id} href={`/admin/subscribers/${sub.id}`}>
               <Card className="hover:border-primary/50 transition-colors cursor-pointer shadow-sm border overflow-hidden">
                 <CardContent className="p-0">

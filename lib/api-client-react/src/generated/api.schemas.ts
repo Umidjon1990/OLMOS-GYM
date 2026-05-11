@@ -348,6 +348,7 @@ export type ListSubscribersParams = {
    */
   planId?: number | null;
   search?: string;
+  paymentStatus?: ListSubscribersPaymentStatus;
 };
 
 export type ListSubscribersStatus =
@@ -358,6 +359,15 @@ export const ListSubscribersStatus = {
   expired: "expired",
   pending: "pending",
   blocked: "blocked",
+} as const;
+
+export type ListSubscribersPaymentStatus =
+  (typeof ListSubscribersPaymentStatus)[keyof typeof ListSubscribersPaymentStatus];
+
+export const ListSubscribersPaymentStatus = {
+  paid: "paid",
+  pending: "pending",
+  overdue: "overdue",
 } as const;
 
 export type ListApplicationsParams = {

@@ -21,9 +21,19 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useState } from "react";
+import { useSearch } from "wouter";
 
 export default function Payments() {
-  const { data: payments, isLoading } = useListPayments({ query: { queryKey: getListPaymentsQueryKey() } });
+  const searchStr = useSearch();
+  const urlParams = new URLSearchParams(searchStr);
+  const urlStatusFilter = urlParams.get("status") ?? "all";
+
+  const [statusView, setStatusView] = useState<string>(urlStatusFilter);
+
+  const { data: allPayments, isLoading } = useListPayments({ query: { queryKey: getListPaymentsQueryKey() } });
+  const payments = statusView === "all"
+    ? allPayments
+    : allPayments?.filter(p => p.status === statusView);
   const confirmPayment = useConfirmPayment();
   const createPayment = useCreatePayment();
   const { toast } = useToast();
@@ -97,7 +107,25 @@ export default function Payments() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">To'lovlar</h1>
-          <p className="text-muted-foreground text-sm mt-1">To'lovlarni boshqarish va tasdiqlash</p>
+          <div className="flex gap-2 mt-2">
+            {[
+              { value: "all", label: "Barchasi" },
+              { value: "pending", label: "⏳ Kutilmoqda" },
+              { value: "confirmed", label: "✅ Tasdiqlangan" },
+            ].map(tab => (
+              <button
+                key={tab.value}
+                onClick={() => setStatusView(tab.value)}
+                className={`text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${
+                  statusView === tab.value
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-primary/50"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>

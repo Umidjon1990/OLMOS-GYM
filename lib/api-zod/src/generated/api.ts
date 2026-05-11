@@ -80,6 +80,7 @@ export const ListSubscribersQueryParams = zod.object({
   status: zod.enum(["active", "expired", "pending", "blocked"]).optional(),
   planId: zod.coerce.number().nullish(),
   search: zod.coerce.string().optional(),
+  paymentStatus: zod.enum(["paid", "pending", "overdue"]).optional(),
 });
 
 export const ListSubscribersResponseItem = zod.object({
