@@ -20,8 +20,8 @@ const applicationSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Gym hero image — gym machines & equipment rows, no people
-const HERO_IMAGE = "https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=2070&auto=format&fit=crop";
+// Gym hero image — modern gym interior with cardio machines only, no people
+const HERO_IMAGE = "https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=2070&auto=format&fit=crop";
 
 export default function Home() {
   const { data: settings } = useGetWebsiteSettings({ query: { queryKey: getGetWebsiteSettingsQueryKey() } });
@@ -87,8 +87,8 @@ export default function Home() {
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url(${settings?.bannerUrl || HERO_IMAGE})` }}
         />
-        {/* Strong dark gradient so text is always readable */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/65 to-black/80" />
+        {/* Lighter overlay — equipment visible, text still readable */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/30 to-black/60" />
 
         <div className="relative z-10 container mx-auto px-4 py-20 flex flex-col items-center text-center">
           {/* Badge */}
