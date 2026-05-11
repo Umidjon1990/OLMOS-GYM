@@ -15,12 +15,12 @@ import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 
 const subscriberSchema = z.object({
-  firstName: z.string().min(2, "First name is required"),
-  lastName: z.string().min(2, "Last name is required"),
-  phone: z.string().min(10, "Valid phone number required"),
-  planId: z.coerce.number().min(1, "Plan is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
+  firstName: z.string().min(2, "Ism kiritilishi shart"),
+  lastName: z.string().min(2, "Familiya kiritilishi shart"),
+  phone: z.string().min(10, "To'g'ri telefon raqam kiriting"),
+  planId: z.coerce.number().min(1, "Reja tanlanishi shart"),
+  startDate: z.string().min(1, "Boshlanish sanasi kiritilishi shart"),
+  endDate: z.string().min(1, "Tugash sanasi kiritilishi shart"),
   paymentStatus: z.enum(["paid", "pending", "overdue"]),
   status: z.enum(["active", "expired", "pending", "blocked"]),
   telegramChatId: z.string().optional(),
@@ -31,18 +31,18 @@ export default function SubscriberForm() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   const isNew = !id || id === "new";
   const subscriberId = isNew ? 0 : parseInt(id as string, 10);
-  
-  const { data: subscriber, isLoading: isSubLoading } = useGetSubscriber(subscriberId, { 
-    query: { enabled: !isNew, queryKey: getGetSubscriberQueryKey(subscriberId) } 
+
+  const { data: subscriber, isLoading: isSubLoading } = useGetSubscriber(subscriberId, {
+    query: { enabled: !isNew, queryKey: getGetSubscriberQueryKey(subscriberId) }
   });
   const { data: plans, isLoading: isPlansLoading } = useListPlans({ query: { queryKey: getListPlansQueryKey() } });
-  
+
   const createSubscriber = useCreateSubscriber();
   const updateSubscriber = useUpdateSubscriber();
-  
+
   const form = useForm<z.infer<typeof subscriberSchema>>({
     resolver: zodResolver(subscriberSchema),
     defaultValues: {
@@ -52,7 +52,7 @@ export default function SubscriberForm() {
       planId: 0,
       startDate: new Date().toISOString().split('T')[0],
       endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
-      paymentStatus: "pending",
+      paymentStatus: "paid",
       status: "active",
       notes: "",
       telegramChatId: "",
@@ -60,7 +60,7 @@ export default function SubscriberForm() {
   });
 
   const initializedForId = useRef<number | null>(null);
-  
+
   useEffect(() => {
     if (subscriber && !isNew && initializedForId.current !== subscriberId) {
       initializedForId.current = subscriberId;
@@ -86,10 +86,10 @@ export default function SubscriberForm() {
         {
           onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: getListSubscribersQueryKey() });
-            toast({ title: "Subscriber created successfully" });
+            toast({ title: "A'zo muvaffaqiyatli qo'shildi" });
             setLocation(`/admin/subscribers/${data.id}`);
           },
-          onError: () => toast({ title: "Failed to create subscriber", variant: "destructive" })
+          onError: () => toast({ title: "A'zo qo'shishda xatolik", variant: "destructive" })
         }
       );
     } else {
@@ -99,17 +99,17 @@ export default function SubscriberForm() {
           onSuccess: (data) => {
             queryClient.setQueryData(getGetSubscriberQueryKey(subscriberId), data);
             queryClient.invalidateQueries({ queryKey: getListSubscribersQueryKey() });
-            toast({ title: "Subscriber updated successfully" });
+            toast({ title: "O'zgarishlar saqlandi" });
             setLocation(`/admin/subscribers/${subscriberId}`);
           },
-          onError: () => toast({ title: "Failed to update subscriber", variant: "destructive" })
+          onError: () => toast({ title: "Saqlashda xatolik", variant: "destructive" })
         }
       );
     }
   };
 
   if ((!isNew && isSubLoading) || isPlansLoading) {
-    return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    return <div className="p-8 text-center text-muted-foreground">Yuklanmoqda...</div>;
   }
 
   return (
@@ -118,42 +118,50 @@ export default function SubscriberForm() {
         <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">{isNew ? "New Subscriber" : "Edit Subscriber"}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isNew ? "Yangi a'zo qo'shish" : "A'zoni tahrirlash"}
+        </h1>
       </div>
-      
+
       <Card className="border shadow-sm">
         <CardContent className="p-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <FormField control={form.control} name="firstName" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>First Name</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormLabel>Ism</FormLabel>
+                    <FormControl><Input placeholder="Jasur" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="lastName" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Last Name</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormLabel>Familiya</FormLabel>
+                    <FormControl><Input placeholder="Toshmatov" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="phone" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl><Input type="tel" {...field} /></FormControl>
+                    <FormLabel>Telefon raqam</FormLabel>
+                    <FormControl><Input type="tel" placeholder="+998901234567" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="planId" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Plan</FormLabel>
+                    <FormLabel>Reja</FormLabel>
                     <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value?.toString()}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger></FormControl>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Reja tanlang" /></SelectTrigger>
+                      </FormControl>
                       <SelectContent>
-                        {plans?.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>)}
+                        {plans?.map(p => (
+                          <SelectItem key={p.id} value={p.id.toString()}>
+                            {p.name} — {p.price.toLocaleString("uz")} so'm
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -161,28 +169,30 @@ export default function SubscriberForm() {
                 )} />
                 <FormField control={form.control} name="startDate" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Date</FormLabel>
+                    <FormLabel>Boshlanish sanasi</FormLabel>
                     <FormControl><Input type="date" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="endDate" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Date</FormLabel>
+                    <FormLabel>Tugash sanasi</FormLabel>
                     <FormControl><Input type="date" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="status" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status</FormLabel>
+                    <FormLabel>Holat</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Holat tanlang" /></SelectTrigger>
+                      </FormControl>
                       <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="expired">Expired</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="blocked">Blocked</SelectItem>
+                        <SelectItem value="active">Faol</SelectItem>
+                        <SelectItem value="expired">Muddati tugagan</SelectItem>
+                        <SelectItem value="pending">Kutilmoqda</SelectItem>
+                        <SelectItem value="blocked">Bloklangan</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -190,40 +200,47 @@ export default function SubscriberForm() {
                 )} />
                 <FormField control={form.control} name="paymentStatus" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Payment Status</FormLabel>
+                    <FormLabel>To'lov holati</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select payment status" /></SelectTrigger></FormControl>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="To'lov holatini tanlang" /></SelectTrigger>
+                      </FormControl>
                       <SelectContent>
-                        <SelectItem value="paid">Paid</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="overdue">Overdue</SelectItem>
+                        <SelectItem value="paid">To'langan</SelectItem>
+                        <SelectItem value="pending">Kutilmoqda</SelectItem>
+                        <SelectItem value="overdue">Muddati o'tgan</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )} />
               </div>
-              
+
               <FormField control={form.control} name="telegramChatId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Telegram Chat ID (Optional)</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormLabel>Telegram Chat ID (ixtiyoriy)</FormLabel>
+                  <FormControl><Input placeholder="123456789" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
-              
+
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
-                  <FormControl><Textarea {...field} /></FormControl>
+                  <FormLabel>Eslatma (ixtiyoriy)</FormLabel>
+                  <FormControl><Textarea placeholder="A'zo haqida qo'shimcha ma'lumot..." {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
 
               <div className="flex justify-end pt-4 border-t">
-                <Button type="submit" size="lg" className="w-full md:w-auto" disabled={createSubscriber.isPending || updateSubscriber.isPending}>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full md:w-auto olmos-primary-btn"
+                  disabled={createSubscriber.isPending || updateSubscriber.isPending}
+                >
                   <Save className="h-4 w-4 mr-2" />
-                  {isNew ? "Create Subscriber" : "Save Changes"}
+                  {isNew ? "A'zoni saqlash" : "O'zgarishlarni saqlash"}
                 </Button>
               </div>
             </form>
