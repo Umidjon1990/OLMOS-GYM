@@ -95,7 +95,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <div className="olmos-gem-bg p-1.5 rounded-md text-white">
             <Gem className="h-5 w-5" />
           </div>
-          <span className="font-black text-xl olmos-gradient-text uppercase tracking-tight">OLMOS</span>
+          <span className="font-black text-xl olmos-gradient-text uppercase tracking-tight">OLMOS FITNESS</span>
         </div>
         <div className="flex-1 p-4 overflow-y-auto">
           <NavLinks />
