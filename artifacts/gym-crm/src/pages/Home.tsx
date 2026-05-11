@@ -20,8 +20,8 @@ const applicationSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Gym hero image — barbells & weight racks, no women
-const HERO_IMAGE = "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop";
+// Gym hero image — gym machines & equipment rows, no people
+const HERO_IMAGE = "https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=2070&auto=format&fit=crop";
 
 export default function Home() {
   const { data: settings } = useGetWebsiteSettings({ query: { queryKey: getGetWebsiteSettingsQueryKey() } });
