@@ -341,6 +341,33 @@ export interface Notification {
   createdAt: string;
 }
 
+export type BulkImportRequestPaymentStatus =
+  (typeof BulkImportRequestPaymentStatus)[keyof typeof BulkImportRequestPaymentStatus];
+
+export const BulkImportRequestPaymentStatus = {
+  paid: "paid",
+  pending: "pending",
+} as const;
+
+export type BulkImportRequestRowsItem = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  startDate: string;
+};
+
+export interface BulkImportRequest {
+  planId: number;
+  paymentStatus?: BulkImportRequestPaymentStatus;
+  rows: BulkImportRequestRowsItem[];
+}
+
+export interface BulkImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
 export type ListSubscribersParams = {
   status?: ListSubscribersStatus;
   /**

@@ -56,7 +56,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           >
             <item.icon className="mr-2 h-5 w-5" />
             {item.label}
-            {item.badge > 0 && (
+            {(item.badge ?? 0) > 0 && (
               <Badge variant="destructive" className="absolute right-2 top-1/2 -translate-y-1/2">
                 {item.badge}
               </Badge>
@@ -150,9 +150,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <div className={`flex flex-col items-center justify-center h-full space-y-1 relative ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
                 <item.icon className={`h-5 w-5 ${isActive ? 'fill-primary/10' : ''}`} />
                 <span className="text-[10px] font-semibold">{item.label}</span>
-                {item.badge > 0 && (
+                {(item.badge ?? 0) > 0 && (
                   <Badge variant="destructive" className="absolute top-1 right-2 h-4 w-4 flex items-center justify-center p-0 text-[9px] rounded-full">
-                    {item.badge > 9 ? '9+' : item.badge}
+                    {(item.badge ?? 0) > 9 ? '9+' : item.badge}
                   </Badge>
                 )}
               </div>

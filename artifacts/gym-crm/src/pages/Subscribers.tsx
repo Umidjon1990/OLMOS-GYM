@@ -1,5 +1,5 @@
 import { useListSubscribers, getListSubscribersQueryKey } from "@workspace/api-client-react";
-import { Search, Plus, UserX, Clock, CreditCard } from "lucide-react";
+import { Search, Plus, UserX, Clock, CreditCard, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useSearch } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -94,11 +94,18 @@ export default function Subscribers() {
     <div className="p-4 md:p-8 space-y-5 pb-24 md:pb-8 relative min-h-screen">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">A'zolar</h1>
-        <Link href="/admin/subscribers/new" className="hidden md:block">
-          <Button className="olmos-primary-btn font-semibold">
-            <Plus className="mr-2 h-4 w-4" /> Yangi a'zo
-          </Button>
-        </Link>
+        <div className="hidden md:flex gap-2">
+          <Link href="/admin/subscribers/bulk">
+            <Button variant="outline" className="font-semibold gap-1.5">
+              <Upload className="h-4 w-4" /> Bulk import
+            </Button>
+          </Link>
+          <Link href="/admin/subscribers/new">
+            <Button className="olmos-primary-btn font-semibold">
+              <Plus className="mr-2 h-4 w-4" /> Yangi a'zo
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {activeBanner && (

@@ -118,6 +118,28 @@ export const CreateSubscriberBody = zod.object({
 });
 
 /**
+ * @summary Bulk import subscribers from rows
+ */
+export const BulkImportSubscribersBody = zod.object({
+  planId: zod.number(),
+  paymentStatus: zod.enum(["paid", "pending"]).optional(),
+  rows: zod.array(
+    zod.object({
+      firstName: zod.string(),
+      lastName: zod.string(),
+      phone: zod.string(),
+      startDate: zod.string(),
+    }),
+  ),
+});
+
+export const BulkImportSubscribersResponse = zod.object({
+  imported: zod.number(),
+  skipped: zod.number(),
+  errors: zod.array(zod.string()),
+});
+
+/**
  * @summary Get a subscriber by ID
  */
 export const GetSubscriberParams = zod.object({

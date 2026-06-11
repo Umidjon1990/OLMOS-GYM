@@ -47,7 +47,7 @@ router.post("/", async (req, res) => {
       subscriberId: body.subscriberId,
       planId: body.planId,
       amount: String(body.amount),
-      paymentDate: body.paymentDate,
+      paymentDate: body.paymentDate instanceof Date ? body.paymentDate.toISOString().split("T")[0] : body.paymentDate,
       notes: body.notes,
       extendSubscription: body.extendSubscription ?? true,
       status: "pending",

@@ -21,6 +21,7 @@ import WebsiteSettingsPage from "@/pages/WebsiteSettings";
 import Gallery from "@/pages/Gallery";
 import Trainers from "@/pages/Trainers";
 import TelegramSettings from "@/pages/TelegramSettings";
+import BulkImport from "@/pages/BulkImport";
 import AdminLayout from "@/components/layout/AdminLayout";
 
 const clerkPubKey = publishableKeyFromHost(
@@ -163,6 +164,7 @@ function ClerkProviderWithRoutes() {
           <ProtectedRoute path="/admin/gallery" component={Gallery} />
           <ProtectedRoute path="/admin/trainers" component={Trainers} />
           <ProtectedRoute path="/admin/telegram" component={TelegramSettings} />
+          <ProtectedRoute path="/admin/subscribers/bulk" component={BulkImport} />
           
           <Route component={NotFound} />
         </Switch>

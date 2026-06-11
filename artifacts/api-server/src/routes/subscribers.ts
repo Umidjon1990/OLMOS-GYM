@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { subscribersTable, plansTable, paymentsTable } from "@workspace/db";
+import { subscribersTable, plansTable, paymentsTable, notificationsTable } from "@workspace/db";
 import { eq, and, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -62,10 +62,82 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.post("/bulk", async (req, res) => {
+  try {
+    const { planId, paymentStatus = "pending", rows } = req.body as {
+      planId: number;
+      paymentStatus?: "paid" | "pending";
+      rows: { firstName: string; lastName: string; phone: string; startDate: string }[];
+    };
+
+    if (!planId || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "planId va rows majburiy" });
+    }
+
+    const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+    if (!plan) return res.status(404).json({ error: "Reja topilmadi" });
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const row of rows) {
+      try {
+        const { firstName, lastName, phone, startDate } = row;
+        if (!firstName || !lastName || !phone || !startDate) {
+          skipped++;
+          errors.push(`${firstName} ${lastName}: Ma'lumotlar to'liq emas`);
+          continue;
+        }
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + plan.durationDays);
+        const endDateStr = endDate.toISOString().split("T")[0];
+
+        const [newSub] = await db.insert(subscribersTable).values({
+          firstName,
+          lastName,
+          phone,
+          planId,
+          startDate,
+          endDate: endDateStr,
+          paymentStatus,
+          status: "active",
+        }).returning();
+
+        if (paymentStatus === "paid") {
+          await db.insert(paymentsTable).values({
+            subscriberId: newSub.id,
+            planId,
+            amount: String(plan.price),
+            paymentDate: startDate,
+            status: "confirmed",
+            extendSubscription: false,
+          });
+        }
+
+        imported++;
+      } catch (rowErr) {
+        skipped++;
+        errors.push(`${row.firstName} ${row.lastName}: ${String(rowErr)}`);
+      }
+    }
+
+    res.json({ imported, skipped, errors });
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk import subscribers");
+    res.status(500).json({ error: "Bulk import xatosi" });
+  }
+});
+
 router.post("/", async (req, res) => {
   try {
     const body = CreateSubscriberBody.parse(req.body);
-    const [subscriber] = await db.insert(subscribersTable).values(body).returning();
+    const { startDate, endDate, ...restBody } = body;
+    const [subscriber] = await db.insert(subscribersTable).values({
+      ...restBody,
+      startDate: startDate instanceof Date ? startDate.toISOString().split("T")[0] : startDate,
+      endDate: endDate instanceof Date ? endDate.toISOString().split("T")[0] : endDate,
+    }).returning();
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, subscriber.planId));
     res.status(201).json({
       ...subscriber,
@@ -105,9 +177,15 @@ router.patch("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const body = UpdateSubscriberBody.parse(req.body);
+    const { startDate: sd, endDate: ed, ...restBody } = body;
     const [updated] = await db
       .update(subscribersTable)
-      .set({ ...body, updatedAt: new Date() })
+      .set({
+        ...restBody,
+        ...(sd !== undefined ? { startDate: sd instanceof Date ? sd.toISOString().split("T")[0] : sd } : {}),
+        ...(ed !== undefined ? { endDate: ed instanceof Date ? ed.toISOString().split("T")[0] : ed } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(subscribersTable.id, id))
       .returning();
 

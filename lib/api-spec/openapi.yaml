@@ -137,6 +137,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/Subscriber"
 
+  /subscribers/bulk:
+    post:
+      operationId: bulkImportSubscribers
+      tags: [subscribers]
+      summary: Bulk import subscribers from rows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkImportRequest"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkImportResult"
+
   /subscribers/{id}:
     get:
       operationId: getSubscriber
@@ -1126,3 +1145,40 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    BulkImportRequest:
+      type: object
+      required: [planId, rows]
+      properties:
+        planId:
+          type: integer
+        paymentStatus:
+          type: string
+          enum: [paid, pending]
+        rows:
+          type: array
+          items:
+            type: object
+            required: [firstName, lastName, phone, startDate]
+            properties:
+              firstName:
+                type: string
+              lastName:
+                type: string
+              phone:
+                type: string
+              startDate:
+                type: string
+
+    BulkImportResult:
+      type: object
+      required: [imported, skipped, errors]
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string

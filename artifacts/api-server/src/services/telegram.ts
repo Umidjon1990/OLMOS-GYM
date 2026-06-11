@@ -123,8 +123,7 @@ async function showMemberInfo(chatId: number) {
     reply_markup: {
       keyboard: [[{ text: "📊 Ma'lumotlarim" }]],
       resize_keyboard: true,
-      persistent: true,
-    },
+    } as TelegramBot.ReplyKeyboardMarkup,
   });
 }
 
@@ -165,8 +164,7 @@ async function linkMemberByPhone(chatId: number, phone: string) {
       reply_markup: {
         keyboard: [[{ text: "📊 Ma'lumotlarim" }]],
         resize_keyboard: true,
-        persistent: true,
-      },
+      } as TelegramBot.ReplyKeyboardMarkup,
     }
   );
   logger.info({ chatId, subscriberId: sub.id }, "Member linked via phone");
@@ -366,16 +364,14 @@ const ADMIN_KEYBOARD: TelegramBot.SendMessageOptions = {
       [{ text: "💰 Moliya" }, { text: "📊 Statistika" }],
     ],
     resize_keyboard: true,
-    persistent: true,
-  },
+  } as TelegramBot.ReplyKeyboardMarkup,
 };
 
 const MEMBER_KEYBOARD: TelegramBot.SendMessageOptions = {
   reply_markup: {
     keyboard: [[{ text: "📊 Ma'lumotlarim" }]],
     resize_keyboard: true,
-    persistent: true,
-  },
+  } as TelegramBot.ReplyKeyboardMarkup,
 };
 
 function subscribersMenu(): TelegramBot.SendMessageOptions {

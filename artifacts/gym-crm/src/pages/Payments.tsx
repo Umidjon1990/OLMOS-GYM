@@ -55,7 +55,7 @@ export default function Payments() {
 
   const handleConfirm = (id: number) => {
     confirmPayment.mutate(
-      { id, data: {} },
+      { id },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });

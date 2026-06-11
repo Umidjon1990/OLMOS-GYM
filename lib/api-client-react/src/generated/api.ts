@@ -19,6 +19,8 @@ import type {
 import type {
   Application,
   ApplicationInput,
+  BulkImportRequest,
+  BulkImportResult,
   DashboardStats,
   GalleryImage,
   GalleryImageInput,
@@ -530,6 +532,92 @@ export const useCreateSubscriber = <
   TContext
 > => {
   return useMutation(getCreateSubscriberMutationOptions(options));
+};
+
+/**
+ * @summary Bulk import subscribers from rows
+ */
+export const getBulkImportSubscribersUrl = () => {
+  return `/api/subscribers/bulk`;
+};
+
+export const bulkImportSubscribers = async (
+  bulkImportRequest: BulkImportRequest,
+  options?: RequestInit,
+): Promise<BulkImportResult> => {
+  return customFetch<BulkImportResult>(getBulkImportSubscribersUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkImportRequest),
+  });
+};
+
+export const getBulkImportSubscribersMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkImportSubscribers>>,
+    TError,
+    { data: BodyType<BulkImportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkImportSubscribers>>,
+  TError,
+  { data: BodyType<BulkImportRequest> },
+  TContext
+> => {
+  const mutationKey = ["bulkImportSubscribers"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkImportSubscribers>>,
+    { data: BodyType<BulkImportRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkImportSubscribers(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkImportSubscribersMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkImportSubscribers>>
+>;
+export type BulkImportSubscribersMutationBody = BodyType<BulkImportRequest>;
+export type BulkImportSubscribersMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Bulk import subscribers from rows
+ */
+export const useBulkImportSubscribers = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkImportSubscribers>>,
+    TError,
+    { data: BodyType<BulkImportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkImportSubscribers>>,
+  TError,
+  { data: BodyType<BulkImportRequest> },
+  TContext
+> => {
+  return useMutation(getBulkImportSubscribersMutationOptions(options));
 };
 
 /**

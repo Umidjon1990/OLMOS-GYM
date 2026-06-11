@@ -16,7 +16,7 @@ export default function Applications() {
 
   const handleApprove = (id: number) => {
     approveApp.mutate(
-      { id, data: {} },
+      { id },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListApplicationsQueryKey({}) });
@@ -29,7 +29,7 @@ export default function Applications() {
 
   const handleReject = (id: number) => {
     rejectApp.mutate(
-      { id, data: {} },
+      { id },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListApplicationsQueryKey({}) });
