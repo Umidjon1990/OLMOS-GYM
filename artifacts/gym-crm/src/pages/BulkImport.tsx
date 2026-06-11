@@ -76,7 +76,6 @@ function parseRows(text: string, hasHeader: boolean): ParsedRow[] {
     const startDate = parseDate(rawDate);
     const amountPaid = parseAmount(rawAmount);
     const errors: string[] = [];
-    if (!phone) errors.push("Telefon bo'sh");
     if (!startDate) errors.push(`Sana noto'g'ri: "${rawDate}"`);
     return { firstName, lastName, phone, startDate: startDate ?? "", amountPaid, error: errors.length ? errors.join("; ") : undefined };
   });
