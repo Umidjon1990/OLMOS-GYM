@@ -1,1 +1,2 @@
 - [Subscriber serialization](subscriber-serialization.md) — all subscriber API responses must go through formatSubscriber so numeric columns (debtAmount, price) stay Number, not pg strings.
+- [Admin auth route gating](auth-route-gating.md) — method-only allowlist leaks admin endpoints sharing a public method; use path-aware allowWhen for mixed routers.

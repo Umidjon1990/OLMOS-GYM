@@ -25,3 +25,18 @@ export function allowMethods(...methods: string[]): RequestHandler {
     return requireAuth(req, res, next);
   };
 }
+
+/**
+ * Lets a request through without auth only when `predicate` returns true,
+ * otherwise requires auth. Use for routers that have one public endpoint mixed
+ * with protected ones (e.g. applications: public POST "/" create, but admin-only
+ * approve/reject). `req.path` is relative to the router's mount point.
+ */
+export function allowWhen(
+  predicate: (req: Parameters<RequestHandler>[0]) => boolean,
+): RequestHandler {
+  return (req, res, next) => {
+    if (predicate(req)) return next();
+    return requireAuth(req, res, next);
+  };
+}

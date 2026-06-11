@@ -11,7 +11,7 @@ import trainersRouter from "./trainers";
 import applicationsRouter from "./applications";
 import notificationsRouter from "./notifications";
 import telegramRouter from "./telegram";
-import { requireAuth, allowMethods } from "../middlewares/requireAuth";
+import { requireAuth, allowMethods, allowWhen } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -24,7 +24,13 @@ router.use("/plans", allowMethods("GET"), plansRouter);
 router.use("/website", allowMethods("GET"), websiteRouter);
 router.use("/trainers", allowMethods("GET"), trainersRouter);
 router.use("/gallery", allowMethods("GET"), galleryRouter);
-router.use("/applications", allowMethods("POST"), applicationsRouter);
+// Only public application endpoint is POST "/" (create from landing page).
+// approve/reject (POST "/:id/...") and GET listing require auth.
+router.use(
+  "/applications",
+  allowWhen((req) => req.method === "POST" && req.path === "/"),
+  applicationsRouter,
+);
 
 // Admin-only
 router.use("/dashboard", requireAuth, dashboardRouter);

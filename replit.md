@@ -29,7 +29,11 @@ Gym CRM boshqaruv tizimi — obunachi, to'lov, reja va veb-sayt kontentini boshq
 - `lib/api-client-react/src/generated/` — Orval tomonidan generatsiya qilingan React Query hooks
 - `artifacts/api-server/src/routes/` — Express route handlerlari
 - `artifacts/gym-crm/src/pages/` — Frontend sahifalari
-- `artifacts/gym-crm/src/App.tsx` — Router va Clerk auth setup
+- `artifacts/gym-crm/src/App.tsx` — Router va admin auth setup (AuthProvider, ProtectedRoute)
+- `artifacts/gym-crm/src/lib/auth.tsx` — AuthProvider/useAuth (login/logout/me, signed cookie)
+- `artifacts/gym-crm/src/pages/Login.tsx` — admin login sahifasi
+- `artifacts/api-server/src/middlewares/requireAuth.ts` — cookie auth guard (requireAuth, allowMethods, allowWhen)
+- `artifacts/api-server/src/routes/auth.ts` — POST /login, POST /logout, GET /me
 
 ## Architecture decisions
 
