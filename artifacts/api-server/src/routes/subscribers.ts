@@ -84,10 +84,10 @@ router.post("/bulk", async (req, res) => {
 
     for (const row of rows) {
       try {
-        const { firstName, lastName, phone, startDate } = row;
-        if (!firstName || !lastName || !phone || !startDate) {
+        const { firstName = "", lastName = "", phone = "", startDate } = row;
+        if (!startDate) {
           skipped++;
-          errors.push(`${firstName} ${lastName}: Ma'lumotlar to'liq emas`);
+          errors.push(`${firstName} ${lastName}: Sana kiritilmagan`);
           continue;
         }
 
@@ -103,22 +103,36 @@ router.post("/bulk", async (req, res) => {
         endDate.setDate(endDate.getDate() + plan.durationDays);
         const endDateStr = endDate.toISOString().split("T")[0];
 
-        // A'zolik holati bugungi kunga nisbatan hisoblanadi (Toshkent vaqti):
-        // tugash sanasi o'tib ketgan bo'lsa — "muddati tugagan"
         const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
         const membershipStatus = endDateStr < todayStr ? "expired" : "active";
+
+        // phone bo'sh bo'lsa null saqlash (unique constraint uchun)
+        const phoneVal = phone.trim() || null;
 
         const [newSub] = await db.insert(subscribersTable).values({
           firstName,
           lastName,
-          phone,
+          phone: phoneVal ?? "",
           planId,
           startDate,
           endDate: endDateStr,
           paymentStatus: rowPaymentStatus,
           debtAmount: String(debt),
           status: membershipStatus,
-        }).returning();
+        }).onConflictDoNothing().returning();
+
+        if (!newSub) {
+          // phone unique conflict — yangilash
+          const [existing] = await db.select().from(subscribersTable)
+            .where(eq(subscribersTable.phone, phoneVal ?? ""));
+          if (existing) {
+            imported++;
+            continue;
+          }
+          skipped++;
+          errors.push(`${firstName} ${lastName}: Allaqachon mavjud`);
+          continue;
+        }
 
         // To'langan summa bo'lsa, to'lov yozuvi yaratiladi
         if (paid > 0) {
@@ -134,8 +148,11 @@ router.post("/bulk", async (req, res) => {
 
         imported++;
       } catch (rowErr) {
+        const msg = rowErr instanceof Error
+          ? (rowErr.cause instanceof Error ? rowErr.cause.message : rowErr.message)
+          : String(rowErr);
         skipped++;
-        errors.push(`${row.firstName} ${row.lastName}: ${String(rowErr)}`);
+        errors.push(`${row.firstName ?? ""} ${row.lastName ?? ""}: ${msg}`);
       }
     }
 
