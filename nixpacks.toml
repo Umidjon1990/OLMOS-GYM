@@ -2,7 +2,7 @@
 COREPACK_INTEGRITY_KEYS = "0"
 
 [phases.setup]
-nixPkgs = ["nodejs_22"]
+nixPkgs = ["nodejs_24"]
 
 [phases.install]
 cmds = [
