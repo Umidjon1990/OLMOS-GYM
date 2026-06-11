@@ -10,16 +10,16 @@ Gym CRM boshqaruv tizimi — obunachi, to'lov, reja va veb-sayt kontentini boshq
 - `pnpm run build` — typecheck + build barcha paketlar
 - `pnpm --filter @workspace/api-spec run codegen` — OpenAPI spec dan React Query hooks va Zod sxemalarini qayta generatsiya qilish
 - `pnpm --filter @workspace/db run push` — DB sxema o'zgarishlarini yuborish (faqat dev)
-- Required env: `DATABASE_URL` — Postgres ulanish stringi, `SESSION_SECRET`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`
+- Required env: `DATABASE_URL` — Postgres ulanish stringi, `SESSION_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5 + Clerk auth middleware
+- API: Express 5 + signed-cookie admin auth (bitta admin login)
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (import from `"zod"`, NOT `"zod/v4"` — esbuild bundle incompatible)
 - API codegen: Orval (from OpenAPI spec)
-- Frontend: React + Vite + Tailwind CSS v4 + @clerk/react + wouter router
+- Frontend: React + Vite + Tailwind CSS v4 + wouter router
 - Build: esbuild (ESM bundle)
 
 ## Where things live
@@ -34,7 +34,7 @@ Gym CRM boshqaruv tizimi — obunachi, to'lov, reja va veb-sayt kontentini boshq
 ## Architecture decisions
 
 - Contract-first API: OpenAPI spec → Orval codegen → typed hooks va schemas
-- Clerk auth faqat `/admin/*` routelarni himoya qiladi; `/` public landing page
+- Admin auth: bitta admin (ADMIN_USERNAME/ADMIN_PASSWORD env) signed httpOnly cookie bilan kiradi. `/login` sahifa, `/admin/*` frontend va backend himoyalangan; `/` public landing page. Public API: GET /plans, /website, /trainers, /gallery va POST /applications ochiq
 - Barcha route fayllarda `zod` dan import qilinadi (`"zod"`, `"zod/v4"` EMAS — esbuild resolve qila olmaydi)
 - Mobile-first dizayn: bottom nav bar (mobil), sidebar (desktop)
 - API server paths rewrite qilinmaydi — barcha routelar full base path bilan ishlaydi
@@ -42,7 +42,7 @@ Gym CRM boshqaruv tizimi — obunachi, to'lov, reja va veb-sayt kontentini boshq
 ## Product
 
 - **Public landing page**: FitZone Gym haqida ma'lumot, rejalar, trenerlar, aloqa
-- **Admin panel** (Clerk auth bilan himoyalangan):
+- **Admin panel** (admin login bilan himoyalangan):
   - Dashboard: statistika (jami/faol obunachi, daromad, yangi arizalar)
   - Obunachlar: qidirish, filter, profil ko'rish, qo'shish/tahrirlash
   - Rejalar: narx va davomiylik boshqaruvi

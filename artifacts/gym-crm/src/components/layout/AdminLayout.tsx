@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { useClerk } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import {
   Home,
   Users,
@@ -25,8 +25,13 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [location] = useLocation();
-  const { signOut } = useClerk();
+  const [location, setLocation] = useLocation();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation("/login");
+  };
 
   const { data: applications } = useListApplications({ status: "pending" }, { query: { queryKey: getListApplicationsQueryKey({ status: "pending" }) } });
   const pendingCount = applications?.length || 0;
@@ -81,7 +86,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <Button
         variant="ghost"
         className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 h-12"
-        onClick={() => signOut()}
+        onClick={handleLogout}
       >
         <LogOut className="mr-2 h-5 w-5" />
         Chiqish
