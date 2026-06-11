@@ -155,6 +155,7 @@ function ClerkProviderWithRoutes() {
           <ProtectedRoute path="/admin" component={Dashboard} />
           <ProtectedRoute path="/admin/subscribers" component={Subscribers} />
           <ProtectedRoute path="/admin/subscribers/new" component={SubscriberForm} />
+          <ProtectedRoute path="/admin/subscribers/bulk" component={BulkImport} />
           <ProtectedRoute path="/admin/subscribers/:id/edit" component={SubscriberForm} />
           <ProtectedRoute path="/admin/subscribers/:id" component={SubscriberProfile} />
           <ProtectedRoute path="/admin/plans" component={Plans} />
@@ -164,7 +165,6 @@ function ClerkProviderWithRoutes() {
           <ProtectedRoute path="/admin/gallery" component={Gallery} />
           <ProtectedRoute path="/admin/trainers" component={Trainers} />
           <ProtectedRoute path="/admin/telegram" component={TelegramSettings} />
-          <ProtectedRoute path="/admin/subscribers/bulk" component={BulkImport} />
           
           <Route component={NotFound} />
         </Switch>
