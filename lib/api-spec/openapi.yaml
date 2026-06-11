@@ -155,6 +155,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BulkImportResult"
+    delete:
+      operationId: bulkDeleteSubscribers
+      tags: [subscribers]
+      summary: Delete multiple subscribers by ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeleteRequest"
+      responses:
+        "204":
+          description: Deleted successfully
 
   /subscribers/{id}:
     get:
@@ -1148,6 +1161,15 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    BulkDeleteRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
 
     BulkImportRequest:
       type: object

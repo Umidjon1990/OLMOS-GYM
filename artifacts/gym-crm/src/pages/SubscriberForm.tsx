@@ -15,9 +15,9 @@ import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 
 const subscriberSchema = z.object({
-  firstName: z.string().min(2, "Ism kiritilishi shart"),
-  lastName: z.string().min(2, "Familiya kiritilishi shart"),
-  phone: z.string().min(10, "To'g'ri telefon raqam kiriting"),
+  firstName: z.string().optional().default(""),
+  lastName: z.string().optional().default(""),
+  phone: z.string().optional().default(""),
   planId: z.coerce.number().min(1, "Reja tanlanishi shart"),
   startDate: z.string().min(1, "Boshlanish sanasi kiritilishi shart"),
   endDate: z.string().min(1, "Tugash sanasi kiritilishi shart"),
@@ -43,6 +43,8 @@ export default function SubscriberForm() {
   const createSubscriber = useCreateSubscriber();
   const updateSubscriber = useUpdateSubscriber();
 
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
+
   const form = useForm<z.infer<typeof subscriberSchema>>({
     resolver: zodResolver(subscriberSchema),
     defaultValues: {
@@ -50,8 +52,8 @@ export default function SubscriberForm() {
       lastName: "",
       phone: "",
       planId: 0,
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
+      startDate: today,
+      endDate: today,
       paymentStatus: "paid",
       status: "active",
       notes: "",
@@ -60,6 +62,35 @@ export default function SubscriberForm() {
   });
 
   const initializedForId = useRef<number | null>(null);
+
+  // Auto-select first plan for new subscribers
+  useEffect(() => {
+    if (isNew && plans && plans.length > 0 && form.getValues("planId") === 0) {
+      const firstPlan = plans[0];
+      form.setValue("planId", firstPlan.id);
+      const start = form.getValues("startDate");
+      if (start) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + (firstPlan.durationDays ?? 30));
+        form.setValue("endDate", d.toLocaleDateString("en-CA"));
+      }
+    }
+  }, [plans, isNew, form]);
+
+  // Auto-calculate endDate when plan changes
+  const watchPlanId = form.watch("planId");
+  const watchStartDate = form.watch("startDate");
+  const prevPlanId = useRef<number>(0);
+
+  useEffect(() => {
+    if (!plans || watchPlanId === prevPlanId.current) return;
+    prevPlanId.current = watchPlanId;
+    const plan = plans.find(p => p.id === watchPlanId);
+    if (!plan || !watchStartDate) return;
+    const d = new Date(watchStartDate);
+    d.setDate(d.getDate() + (plan.durationDays ?? 30));
+    form.setValue("endDate", d.toLocaleDateString("en-CA"));
+  }, [watchPlanId, watchStartDate, plans, form]);
 
   useEffect(() => {
     if (subscriber && !isNew && initializedForId.current !== subscriberId) {
@@ -80,9 +111,15 @@ export default function SubscriberForm() {
   }, [subscriber, isNew, subscriberId, form]);
 
   const onSubmit = (values: z.infer<typeof subscriberSchema>) => {
+    const payload = {
+      ...values,
+      firstName: values.firstName || "",
+      lastName: values.lastName || "",
+      phone: values.phone || "",
+    };
     if (isNew) {
       createSubscriber.mutate(
-        { data: values },
+        { data: payload },
         {
           onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: getListSubscribersQueryKey() });
@@ -94,7 +131,7 @@ export default function SubscriberForm() {
       );
     } else {
       updateSubscriber.mutate(
-        { id: subscriberId, data: values },
+        { id: subscriberId, data: payload },
         {
           onSuccess: (data) => {
             queryClient.setQueryData(getGetSubscriberQueryKey(subscriberId), data);
@@ -130,21 +167,21 @@ export default function SubscriberForm() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <FormField control={form.control} name="firstName" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Ism</FormLabel>
+                    <FormLabel>Ism <span className="text-muted-foreground text-xs">(ixtiyoriy)</span></FormLabel>
                     <FormControl><Input placeholder="Jasur" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="lastName" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Familiya</FormLabel>
+                    <FormLabel>Familiya <span className="text-muted-foreground text-xs">(ixtiyoriy)</span></FormLabel>
                     <FormControl><Input placeholder="Toshmatov" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="phone" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Telefon raqam</FormLabel>
+                    <FormLabel>Telefon raqam <span className="text-muted-foreground text-xs">(ixtiyoriy)</span></FormLabel>
                     <FormControl><Input type="tel" placeholder="+998901234567" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -152,14 +189,14 @@ export default function SubscriberForm() {
                 <FormField control={form.control} name="planId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Reja</FormLabel>
-                    <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value?.toString()}>
+                    <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value ? field.value.toString() : ""}>
                       <FormControl>
                         <SelectTrigger><SelectValue placeholder="Reja tanlang" /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {plans?.map(p => (
                           <SelectItem key={p.id} value={p.id.toString()}>
-                            {p.name} — {p.price.toLocaleString("uz")} so'm
+                            {p.name} — {Number(p.price).toLocaleString("uz")} so'm / {p.durationDays} kun
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -176,7 +213,7 @@ export default function SubscriberForm() {
                 )} />
                 <FormField control={form.control} name="endDate" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tugash sanasi</FormLabel>
+                    <FormLabel>Tugash sanasi <span className="text-muted-foreground text-xs">(avto)</span></FormLabel>
                     <FormControl><Input type="date" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -218,7 +255,7 @@ export default function SubscriberForm() {
 
               <FormField control={form.control} name="telegramChatId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Telegram Chat ID (ixtiyoriy)</FormLabel>
+                  <FormLabel>Telegram Chat ID <span className="text-muted-foreground text-xs">(ixtiyoriy)</span></FormLabel>
                   <FormControl><Input placeholder="123456789" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -226,7 +263,7 @@ export default function SubscriberForm() {
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Eslatma (ixtiyoriy)</FormLabel>
+                  <FormLabel>Eslatma <span className="text-muted-foreground text-xs">(ixtiyoriy)</span></FormLabel>
                   <FormControl><Textarea placeholder="A'zo haqida qo'shimcha ma'lumot..." {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>

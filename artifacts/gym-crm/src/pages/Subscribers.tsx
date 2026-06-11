@@ -1,5 +1,5 @@
-import { useListSubscribers, getListSubscribersQueryKey } from "@workspace/api-client-react";
-import { Search, Plus, UserX, Clock, CreditCard, Upload } from "lucide-react";
+import { useListSubscribers, useBulkDeleteSubscribers, getListSubscribersQueryKey } from "@workspace/api-client-react";
+import { Search, Plus, UserX, Clock, CreditCard, Upload, Trash2, CheckSquare, Square, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useSearch } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 export default function Subscribers() {
   const searchStr = useSearch();
   const params = new URLSearchParams(searchStr);
+  const { toast } = useToast();
 
-  // Initialize filter from URL params
   const urlStatus = params.get("status") ?? "all";
   const urlPayment = params.get("payment") ?? "";
   const urlExpiring = params.get("filter") === "expiring";
@@ -21,12 +23,19 @@ export default function Subscribers() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(urlStatus);
   const [paymentFilter, setPaymentFilter] = useState<string>(urlPayment);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
-  // Sync when URL changes (e.g. navigating from dashboard)
   useEffect(() => {
     setStatusFilter(urlStatus);
     setPaymentFilter(urlPayment);
   }, [urlStatus, urlPayment]);
+
+  // Exit select mode when filters change
+  useEffect(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+  }, [statusFilter, paymentFilter, search]);
 
   const queryParams = {
     search: search.length > 2 ? search : undefined,
@@ -38,10 +47,48 @@ export default function Subscribers() {
     query: { queryKey: getListSubscribersQueryKey(queryParams) },
   });
 
-  // Client-side filter for "expiring soon" (3 days)
+  const bulkDelete = useBulkDeleteSubscribers({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListSubscribersQueryKey({}) });
+        toast({ title: `${selected.size} ta a'zo o'chirildi` });
+        setSelected(new Set());
+        setSelectMode(false);
+      },
+      onError: () => toast({ title: "O'chirishda xatolik", variant: "destructive" }),
+    },
+  });
+
   const filtered = urlExpiring && !paymentFilter
     ? (subscribers ?? []).filter(s => s.daysLeft >= 0 && s.daysLeft <= 3)
     : subscribers;
+
+  const allIds = (filtered ?? []).map(s => s.id);
+  const allSelected = allIds.length > 0 && allIds.every(id => selected.has(id));
+
+  const toggleSelect = (id: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allIds));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selected.size === 0) return;
+    if (!confirm(`${selected.size} ta a'zoni o'chirishni tasdiqlaysizmi?`)) return;
+    bulkDelete.mutate({ data: { ids: Array.from(selected) } });
+  };
 
   const getStatusLabel = (status: string) => {
     switch(status) {
@@ -81,7 +128,6 @@ export default function Subscribers() {
     }
   };
 
-  // Banner for active filter from dashboard
   const activeBanner = urlExpiring
     ? "⏰ Yaqin orada tugaydiganlar (3 kun)"
     : paymentFilter === "pending"
@@ -94,23 +140,70 @@ export default function Subscribers() {
     <div className="p-4 md:p-8 space-y-5 pb-24 md:pb-8 relative min-h-screen">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">A'zolar</h1>
-        <div className="hidden md:flex gap-2">
-          <Link href="/admin/subscribers/bulk">
-            <Button variant="outline" className="font-semibold gap-1.5">
-              <Upload className="h-4 w-4" /> Bulk import
+        <div className="flex items-center gap-2">
+          {selectMode ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSelectMode(false); setSelected(new Set()); }}
+            >
+              <X className="h-4 w-4 mr-1" /> Bekor
             </Button>
-          </Link>
-          <Link href="/admin/subscribers/new">
-            <Button className="olmos-primary-btn font-semibold">
-              <Plus className="mr-2 h-4 w-4" /> Yangi a'zo
-            </Button>
-          </Link>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectMode(true)}
+                className="hidden md:flex font-semibold gap-1.5"
+              >
+                <CheckSquare className="h-4 w-4" /> Tanlash
+              </Button>
+              <div className="hidden md:flex gap-2">
+                <Link href="/admin/subscribers/bulk">
+                  <Button variant="outline" className="font-semibold gap-1.5">
+                    <Upload className="h-4 w-4" /> Bulk import
+                  </Button>
+                </Link>
+                <Link href="/admin/subscribers/new">
+                  <Button className="olmos-primary-btn font-semibold">
+                    <Plus className="mr-2 h-4 w-4" /> Yangi a'zo
+                  </Button>
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {activeBanner && (
         <div className="text-sm font-semibold text-primary bg-primary/10 px-4 py-2 rounded-lg border border-primary/20">
           {activeBanner}
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selectMode && (
+        <div className="flex items-center gap-3 bg-secondary/80 border rounded-xl px-4 py-3 sticky top-14 md:top-0 z-30">
+          <button onClick={toggleAll} className="flex items-center gap-2 text-sm font-semibold shrink-0">
+            {allSelected
+              ? <CheckSquare className="h-5 w-5 text-primary" />
+              : <Square className="h-5 w-5 text-muted-foreground" />}
+            {allSelected ? "Hammasini bekor qil" : "Hammasini tanlash"}
+          </button>
+          <span className="text-sm text-muted-foreground flex-1">
+            {selected.size > 0 ? `${selected.size} ta tanlandi` : ""}
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={selected.size === 0 || bulkDelete.isPending}
+            onClick={handleBulkDelete}
+            className="gap-1.5"
+          >
+            <Trash2 className="h-4 w-4" />
+            O'chirish ({selected.size})
+          </Button>
         </div>
       )}
 
@@ -150,60 +243,105 @@ export default function Subscribers() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered?.map(sub => (
-            <Link key={sub.id} href={`/admin/subscribers/${sub.id}`}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer shadow-sm border overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex items-center p-4">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0 mr-4">
-                      {sub.firstName[0]}{sub.lastName[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start mb-1">
-                        <h3 className="font-bold text-foreground truncate pr-2">{sub.firstName} {sub.lastName}</h3>
-                        <Badge className={`${getStatusColor(sub.status)} text-[10px] uppercase font-bold shrink-0`}>
-                          {getStatusLabel(sub.status)}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">{sub.phone}</p>
-
-                      <div className="flex items-center gap-3 mt-3 text-xs font-medium flex-wrap">
-                        <div className="flex items-center gap-1.5 bg-secondary px-2 py-1 rounded-md">
-                          <span className="truncate max-w-[100px]">{sub.planName}</span>
+          {filtered?.map(sub => {
+            const isChecked = selected.has(sub.id);
+            return (
+              <div key={sub.id} className="relative">
+                {selectMode && (
+                  <button
+                    className="absolute left-3 top-1/2 -translate-y-1/2 z-10 p-1"
+                    onClick={(e) => toggleSelect(sub.id, e)}
+                  >
+                    {isChecked
+                      ? <CheckSquare className="h-5 w-5 text-primary" />
+                      : <Square className="h-5 w-5 text-muted-foreground" />}
+                  </button>
+                )}
+                <Link href={selectMode ? "#" : `/admin/subscribers/${sub.id}`}>
+                  <Card
+                    className={`hover:border-primary/50 transition-colors cursor-pointer shadow-sm border overflow-hidden ${isChecked ? "border-primary bg-primary/5" : ""}`}
+                    onClick={selectMode ? (e) => toggleSelect(sub.id, e as any) : undefined}
+                  >
+                    <CardContent className="p-0">
+                      <div className={`flex items-center p-4 ${selectMode ? "pl-12" : ""}`}>
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0 mr-4">
+                          {(sub.firstName?.[0] || sub.lastName?.[0] || "?")}{sub.firstName && sub.lastName ? sub.lastName[0] : ""}
                         </div>
-                        <div className="flex items-center gap-1 text-slate-600">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span className={sub.daysLeft <= 3 ? "text-red-500 font-bold" : ""}>
-                            {sub.daysLeft > 0 ? `${sub.daysLeft} kun qoldi` : 'Tugagan'}
-                          </span>
-                        </div>
-                        <div className={`flex items-center gap-1 ${getPaymentColor(sub.paymentStatus)} ml-auto`}>
-                          <CreditCard className="h-3.5 w-3.5" />
-                          <span>{getPaymentLabel(sub.paymentStatus)}</span>
-                        </div>
-                        {sub.debtAmount > 0 && (
-                          <div className="flex items-center gap-1 text-red-500 font-bold bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded-md w-full justify-center mt-1">
-                            <span>Qarz: {sub.debtAmount.toLocaleString("uz")} so'm</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start mb-1">
+                            <h3 className="font-bold text-foreground truncate pr-2">
+                              {sub.firstName || sub.lastName ? `${sub.firstName} ${sub.lastName}`.trim() : "Noma'lum"}
+                            </h3>
+                            <Badge className={`${getStatusColor(sub.status)} text-[10px] uppercase font-bold shrink-0`}>
+                              {getStatusLabel(sub.status)}
+                            </Badge>
                           </div>
-                        )}
+                          <p className="text-sm text-muted-foreground truncate">{sub.phone || "—"}</p>
+
+                          <div className="flex items-center gap-3 mt-3 text-xs font-medium flex-wrap">
+                            <div className="flex items-center gap-1.5 bg-secondary px-2 py-1 rounded-md">
+                              <span className="truncate max-w-[100px]">{sub.planName}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-slate-600">
+                              <Clock className="h-3.5 w-3.5" />
+                              <span className={sub.daysLeft <= 3 ? "text-red-500 font-bold" : ""}>
+                                {sub.daysLeft > 0 ? `${sub.daysLeft} kun qoldi` : 'Tugagan'}
+                              </span>
+                            </div>
+                            <div className={`flex items-center gap-1 ${getPaymentColor(sub.paymentStatus)} ml-auto`}>
+                              <CreditCard className="h-3.5 w-3.5" />
+                              <span>{getPaymentLabel(sub.paymentStatus)}</span>
+                            </div>
+                            {sub.debtAmount > 0 && (
+                              <div className="flex items-center gap-1 text-red-500 font-bold bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded-md w-full justify-center mt-1">
+                                <span>Qarz: {sub.debtAmount.toLocaleString("uz")} so'm</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                    </CardContent>
+                  </Card>
+                </Link>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <Link href="/admin/subscribers/new" className="md:hidden">
-        <Button
-          size="icon"
-          className="fixed bottom-20 right-6 h-14 w-14 rounded-full shadow-xl shadow-primary/20 z-40 olmos-gem-bg"
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
-      </Link>
+      {/* Mobile: select mode toggle */}
+      {!selectMode ? (
+        <>
+          <Link href="/admin/subscribers/new" className="md:hidden">
+            <Button
+              size="icon"
+              className="fixed bottom-20 right-6 h-14 w-14 rounded-full shadow-xl shadow-primary/20 z-40 olmos-gem-bg"
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="icon"
+            className="md:hidden fixed bottom-20 left-6 h-12 w-12 rounded-full shadow-lg z-40"
+            onClick={() => setSelectMode(true)}
+          >
+            <CheckSquare className="h-5 w-5" />
+          </Button>
+        </>
+      ) : (
+        selected.size > 0 && (
+          <Button
+            variant="destructive"
+            className="md:hidden fixed bottom-20 right-6 h-14 rounded-full shadow-xl z-40 px-6 gap-2"
+            disabled={bulkDelete.isPending}
+            onClick={handleBulkDelete}
+          >
+            <Trash2 className="h-5 w-5" />
+            O'chirish ({selected.size})
+          </Button>
+        )
+      )}
     </div>
   );
 }

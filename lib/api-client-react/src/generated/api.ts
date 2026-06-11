@@ -19,6 +19,7 @@ import type {
 import type {
   Application,
   ApplicationInput,
+  BulkDeleteRequest,
   BulkImportRequest,
   BulkImportResult,
   DashboardStats,
@@ -618,6 +619,92 @@ export const useBulkImportSubscribers = <
   TContext
 > => {
   return useMutation(getBulkImportSubscribersMutationOptions(options));
+};
+
+/**
+ * @summary Delete multiple subscribers by ID
+ */
+export const getBulkDeleteSubscribersUrl = () => {
+  return `/api/subscribers/bulk`;
+};
+
+export const bulkDeleteSubscribers = async (
+  bulkDeleteRequest: BulkDeleteRequest,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getBulkDeleteSubscribersUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkDeleteRequest),
+  });
+};
+
+export const getBulkDeleteSubscribersMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkDeleteSubscribers>>,
+    TError,
+    { data: BodyType<BulkDeleteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkDeleteSubscribers>>,
+  TError,
+  { data: BodyType<BulkDeleteRequest> },
+  TContext
+> => {
+  const mutationKey = ["bulkDeleteSubscribers"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkDeleteSubscribers>>,
+    { data: BodyType<BulkDeleteRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkDeleteSubscribers(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkDeleteSubscribersMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkDeleteSubscribers>>
+>;
+export type BulkDeleteSubscribersMutationBody = BodyType<BulkDeleteRequest>;
+export type BulkDeleteSubscribersMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete multiple subscribers by ID
+ */
+export const useBulkDeleteSubscribers = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkDeleteSubscribers>>,
+    TError,
+    { data: BodyType<BulkDeleteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkDeleteSubscribers>>,
+  TError,
+  { data: BodyType<BulkDeleteRequest> },
+  TContext
+> => {
+  return useMutation(getBulkDeleteSubscribersMutationOptions(options));
 };
 
 /**

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { subscribersTable, plansTable, paymentsTable, notificationsTable } from "@workspace/db";
-import { eq, and, ilike, or, sql } from "drizzle-orm";
+import { eq, and, ilike, or, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   ListSubscribersQueryParams,
@@ -206,6 +206,18 @@ router.patch("/:id", async (req, res) => {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.issues });
     req.log.error({ err }, "Failed to update subscriber");
     res.status(500).json({ error: "Failed to update subscriber" });
+  }
+});
+
+router.delete("/bulk", async (req, res) => {
+  try {
+    const { ids } = req.body as { ids: number[] };
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    await db.delete(subscribersTable).where(inArray(subscribersTable.id, ids));
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk delete subscribers");
+    res.status(500).json({ error: "Failed to bulk delete subscribers" });
   }
 });
 

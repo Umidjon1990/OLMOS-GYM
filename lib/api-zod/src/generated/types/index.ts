@@ -9,6 +9,7 @@
 export * from "./application";
 export * from "./applicationInput";
 export * from "./applicationStatus";
+export * from "./bulkDeleteRequest";
 export * from "./bulkImportRequest";
 export * from "./bulkImportRequestPaymentStatus";
 export * from "./bulkImportRequestRowsItem";

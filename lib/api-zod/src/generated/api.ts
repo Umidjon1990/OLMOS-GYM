@@ -143,6 +143,13 @@ export const BulkImportSubscribersResponse = zod.object({
 });
 
 /**
+ * @summary Delete multiple subscribers by ID
+ */
+export const BulkDeleteSubscribersBody = zod.object({
+  ids: zod.array(zod.number()),
+});
+
+/**
  * @summary Get a subscriber by ID
  */
 export const GetSubscriberParams = zod.object({

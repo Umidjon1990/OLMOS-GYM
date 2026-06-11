@@ -342,6 +342,10 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface BulkDeleteRequest {
+  ids: number[];
+}
+
 export type BulkImportRequestPaymentStatus =
   (typeof BulkImportRequestPaymentStatus)[keyof typeof BulkImportRequestPaymentStatus];
 
