@@ -103,7 +103,7 @@ export default function BulkImport() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [fileName, setFileName] = useState<string>("");
-  const [pasteText, setPasteText] = useState<string>("");
+  const [pasteText, setPasteText] = useState<string>(TEXT_TEMPLATE);
   const [hasHeader, setHasHeader] = useState(true);
 
   const validRows = rows.filter(r => !r.error);
