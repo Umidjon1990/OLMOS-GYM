@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
 import { useListPlans, getListPlansQueryKey, getListSubscribersQueryKey } from "@workspace/api-client-react";
-import { Upload, Download, CheckCircle2, XCircle, AlertCircle, ArrowLeft, FileSpreadsheet } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertCircle, ArrowLeft, FileSpreadsheet, ClipboardPaste, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -26,80 +27,84 @@ interface ImportResult {
 
 function parseDate(raw: string): string | null {
   const s = raw.trim();
-  // DD.MM.YYYY
   const dmy = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
-  // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // DD/MM/YYYY
   const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (slash) return `${slash[3]}-${slash[2].padStart(2, "0")}-${slash[1].padStart(2, "0")}`;
   return null;
 }
 
-function parseCsv(text: string): ParsedRow[] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) return [];
-  // Skip header row
-  const dataLines = lines.slice(1);
-  return dataLines.map((line, i) => {
-    // Handle quoted fields
-    const cols: string[] = [];
-    let cur = "";
-    let inQ = false;
-    for (const ch of line) {
-      if (ch === '"') { inQ = !inQ; continue; }
-      if (ch === "," && !inQ) { cols.push(cur.trim()); cur = ""; continue; }
-      cur += ch;
-    }
-    cols.push(cur.trim());
+function parseLine(line: string): string[] {
+  // Tab-separated (Excel paste)
+  if (line.includes("\t")) {
+    return line.split("\t").map(c => c.trim());
+  }
+  // Quoted CSV
+  const cols: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (const ch of line) {
+    if (ch === '"') { inQ = !inQ; continue; }
+    if (ch === "," && !inQ) { cols.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  cols.push(cur.trim());
+  // Fallback: if only 1 col found, try splitting by multiple spaces
+  if (cols.length < 3) {
+    return line.split(/\s{2,}/).map(c => c.trim());
+  }
+  return cols;
+}
 
+function parseRows(text: string, hasHeader: boolean): ParsedRow[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length === 0) return [];
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  return dataLines.map((line) => {
+    const cols = parseLine(line);
     const [firstName = "", lastName = "", phone = "", rawDate = ""] = cols;
     const startDate = parseDate(rawDate);
-
     const errors: string[] = [];
     if (!firstName) errors.push("Ism bo'sh");
     if (!lastName) errors.push("Familiya bo'sh");
     if (!phone) errors.push("Telefon bo'sh");
     if (!startDate) errors.push(`Sana noto'g'ri: "${rawDate}"`);
-
-    return {
-      firstName,
-      lastName,
-      phone,
-      startDate: startDate ?? "",
-      error: errors.length ? errors.join("; ") : undefined,
-    };
+    return { firstName, lastName, phone, startDate: startDate ?? "", error: errors.length ? errors.join("; ") : undefined };
   });
 }
 
 function downloadTemplate() {
-  const header = "Ism,Familiya,Telefon,Kelgan_sana";
-  const examples = [
-    "Aziz,Karimov,+998901234567,01.06.2026",
-    "Malika,Yusupova,+998911234567,15.06.2026",
-  ].join("\n");
+  const header = "Ism\tFamiliya\tTelefon\tKelgan_sana";
+  const examples = ["Aziz\tKarimov\t+998901234567\t01.06.2026", "Malika\tYusupova\t+998911234567\t15.06.2026"].join("\n");
   const csv = `${header}\n${examples}`;
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csv.replace(/\t/g, ",")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = "olmos_fitness_shablon.csv";
-  a.click();
+  a.href = url; a.download = "olmos_fitness_shablon.csv"; a.click();
   URL.revokeObjectURL(url);
 }
+
+const TEXT_TEMPLATE = `Ism\tFamiliya\tTelefon\tKelgan_sana
+Aziz\tKarimov\t+998901234567\t01.06.2026
+Malika\tYusupova\t+998911234567\t15.06.2026`;
+
+type InputMode = "file" | "text";
 
 export default function BulkImport() {
   const fileRef = useRef<HTMLInputElement>(null);
   const { data: plans } = useListPlans({ query: { queryKey: getListPlansQueryKey() } });
   const { toast } = useToast();
 
+  const [mode, setMode] = useState<InputMode>("text");
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [planId, setPlanId] = useState<string>("");
   const [paymentStatus, setPaymentStatus] = useState<string>("pending");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [pasteText, setPasteText] = useState<string>("");
+  const [hasHeader, setHasHeader] = useState(true);
 
   const validRows = rows.filter(r => !r.error);
   const invalidRows = rows.filter(r => r.error);
@@ -112,9 +117,22 @@ export default function BulkImport() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      setRows(parseCsv(text));
+      setRows(parseRows(text, true));
     };
     reader.readAsText(file, "UTF-8");
+  };
+
+  const handleTextParse = () => {
+    if (!pasteText.trim()) return;
+    const parsed = parseRows(pasteText, hasHeader);
+    setRows(parsed);
+    setResult(null);
+  };
+
+  const handleClearText = () => {
+    setPasteText("");
+    setRows([]);
+    setResult(null);
   };
 
   const handleImport = async () => {
@@ -127,12 +145,7 @@ export default function BulkImport() {
         body: JSON.stringify({
           planId: parseInt(planId),
           paymentStatus,
-          rows: validRows.map(r => ({
-            firstName: r.firstName,
-            lastName: r.lastName,
-            phone: r.phone,
-            startDate: r.startDate,
-          })),
+          rows: validRows.map(r => ({ firstName: r.firstName, lastName: r.lastName, phone: r.phone, startDate: r.startDate })),
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -142,8 +155,9 @@ export default function BulkImport() {
       toast({ title: `✅ ${data.imported} ta a'zo muvaffaqiyatli qo'shildi!` });
       setRows([]);
       setFileName("");
+      setPasteText("");
       if (fileRef.current) fileRef.current.value = "";
-    } catch (err) {
+    } catch {
       toast({ title: "Xatolik yuz berdi", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -151,116 +165,176 @@ export default function BulkImport() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 pb-24 md:pb-8">
+    <div className="p-4 md:p-8 space-y-5 pb-24 md:pb-8">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/admin/subscribers">
-          <Button variant="ghost" size="icon" className="shrink-0">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          <Button variant="ghost" size="icon" className="shrink-0"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Bulk import</h1>
-          <p className="text-muted-foreground text-sm">Excel/CSV shablon orqali bir vaqtda ko'p a'zo qo'shish</p>
+          <p className="text-muted-foreground text-sm">Bir vaqtda ko'p a'zo qo'shish</p>
         </div>
       </div>
 
-      {/* Step 1 — Download template */}
-      <Card className="border-l-4 border-l-primary shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">1</span>
-            Shablon yuklab oling
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            CSV faylni yuklab oling, to'ldiring va qayta yuklang.
-            Sana formati: <code className="bg-secondary px-1 rounded text-xs">01.06.2026</code> yoki <code className="bg-secondary px-1 rounded text-xs">2026-06-01</code>
-          </p>
-          <Button variant="outline" onClick={downloadTemplate} className="gap-2">
-            <Download className="h-4 w-4" />
-            Shablon yuklab olish (.csv)
-          </Button>
-          <div className="text-xs text-muted-foreground border rounded-lg overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-secondary/50">
-                  {["Ism", "Familiya", "Telefon", "Kelgan_sana"].map(h => (
-                    <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t">
-                  <td className="px-3 py-1.5">Aziz</td>
-                  <td className="px-3 py-1.5">Karimov</td>
-                  <td className="px-3 py-1.5">+998901234567</td>
-                  <td className="px-3 py-1.5">01.06.2026</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Mode tabs */}
+      <div className="flex gap-2 p-1 bg-secondary/50 rounded-xl w-fit">
+        <button
+          onClick={() => { setMode("text"); setRows([]); setResult(null); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mode === "text" ? "bg-background shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <ClipboardPaste className="h-4 w-4" /> Matn qo'shish
+        </button>
+        <button
+          onClick={() => { setMode("file"); setRows([]); setResult(null); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mode === "file" ? "bg-background shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <FileText className="h-4 w-4" /> Fayl yuklash
+        </button>
+      </div>
 
-      {/* Step 2 — Upload file */}
-      <Card className="border-l-4 border-l-amber-500 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <span className="bg-amber-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">2</span>
-            To'ldirilgan faylni yuklang
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,.txt"
-            className="hidden"
-            onChange={handleFile}
-            id="csv-upload"
-          />
-          <label
-            htmlFor="csv-upload"
-            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors
-              ${fileName ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/40 hover:bg-secondary/50"}`}
-          >
-            {fileName ? (
-              <>
-                <FileSpreadsheet className="h-10 w-10 text-primary mb-2" />
-                <span className="font-semibold text-primary">{fileName}</span>
-                <span className="text-xs text-muted-foreground mt-1">{rows.length} ta satr topildi — boshqa fayl tanlash uchun bosing</span>
-              </>
-            ) : (
-              <>
-                <Upload className="h-10 w-10 text-muted-foreground/40 mb-2" />
-                <span className="font-semibold">CSV faylni shu yerga tashlang yoki bosing</span>
-                <span className="text-xs text-muted-foreground mt-1">.csv, .txt formatlar qabul qilinadi</span>
-              </>
-            )}
-          </label>
-        </CardContent>
-      </Card>
+      {/* ── TEXT MODE ─────────────────────────────────────── */}
+      {mode === "text" && (
+        <>
+          <Card className="border-l-4 border-l-primary shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardPaste className="h-4 w-4 text-primary" />
+                Matnni joylashtiring
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Excel yoki Google Sheets dan nusxa ko'chirib (Ctrl+C) quyidagi maydoniga joylashtiring (Ctrl+V).
+                Ustunlar tartibi: <span className="font-semibold text-foreground">Ism · Familiya · Telefon · Sana</span>
+              </p>
 
-      {/* Step 3 — Preview + settings */}
+              {/* Format hint */}
+              <div className="bg-secondary/60 rounded-lg p-3 text-xs font-mono text-muted-foreground overflow-x-auto whitespace-pre">
+{`Ism         Familiya    Telefon           Sana
+Aziz        Karimov     +998901234567     01.06.2026
+Malika      Yusupova    +998911234567     2026-06-15`}
+              </div>
+
+              <Textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={"Ism\tFamiliya\tTelefon\tSana\nAziz\tKarimov\t+998901234567\t01.06.2026"}
+                className="font-mono text-sm min-h-[160px] resize-y"
+                spellCheck={false}
+              />
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasHeader}
+                    onChange={(e) => setHasHeader(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  Birinchi qator — sarlavha (o'tkazib yuboriladi)
+                </label>
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  onClick={handleTextParse}
+                  disabled={!pasteText.trim()}
+                  className="olmos-primary-btn gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Ko'rib chiqish
+                </Button>
+                {pasteText && (
+                  <Button variant="outline" onClick={handleClearText}>Tozalash</Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setPasteText(TEXT_TEMPLATE)} className="text-xs text-muted-foreground">
+                  Namuna joylashtirish
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* ── FILE MODE ─────────────────────────────────────── */}
+      {mode === "file" && (
+        <>
+          {/* Step 1 – template */}
+          <Card className="border-l-4 border-l-primary shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">1</span>
+                Shablon yuklab oling
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                CSV faylni yuklab oling, to'ldiring va qayta yuklang.
+                Sana formati: <code className="bg-secondary px-1 rounded text-xs">01.06.2026</code> yoki <code className="bg-secondary px-1 rounded text-xs">2026-06-01</code>
+              </p>
+              <Button variant="outline" onClick={downloadTemplate} className="gap-2">
+                <Download className="h-4 w-4" /> Shablon yuklab olish (.csv)
+              </Button>
+              <div className="text-xs text-muted-foreground border rounded-lg overflow-x-auto">
+                <table className="w-full">
+                  <thead><tr className="bg-secondary/50">{["Ism","Familiya","Telefon","Kelgan_sana"].map(h=><th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>)}</tr></thead>
+                  <tbody><tr className="border-t"><td className="px-3 py-1.5">Aziz</td><td className="px-3 py-1.5">Karimov</td><td className="px-3 py-1.5">+998901234567</td><td className="px-3 py-1.5">01.06.2026</td></tr></tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 2 – upload */}
+          <Card className="border-l-4 border-l-amber-500 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <span className="bg-amber-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">2</span>
+                To'ldirilgan faylni yuklang
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} id="csv-upload" />
+              <label htmlFor="csv-upload"
+                className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors
+                  ${fileName ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/40 hover:bg-secondary/50"}`}
+              >
+                {fileName ? (
+                  <>
+                    <FileSpreadsheet className="h-10 w-10 text-primary mb-2" />
+                    <span className="font-semibold text-primary">{fileName}</span>
+                    <span className="text-xs text-muted-foreground mt-1">{rows.length} ta satr — boshqa fayl tanlash uchun bosing</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                    <span className="font-semibold">CSV faylni shu yerga tashlang yoki bosing</span>
+                    <span className="text-xs text-muted-foreground mt-1">.csv, .txt formatlar qabul qilinadi</span>
+                  </>
+                )}
+              </label>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* ── PREVIEW + IMPORT ──────────────────────────────── */}
       {rows.length > 0 && (
         <Card className="border-l-4 border-l-green-500 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <span className="bg-green-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">3</span>
+            <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+              <span className="bg-green-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold shrink-0">
+                {mode === "text" ? "2" : "3"}
+              </span>
               Ko'rib chiqing va import qiling
               <div className="ml-auto flex gap-2">
-                {validRows.length > 0 && (
-                  <Badge className="bg-green-500 hover:bg-green-600">{validRows.length} ta to'g'ri</Badge>
-                )}
-                {invalidRows.length > 0 && (
-                  <Badge className="bg-red-500 hover:bg-red-600">{invalidRows.length} ta xato</Badge>
-                )}
+                {validRows.length > 0 && <Badge className="bg-green-500 hover:bg-green-600">{validRows.length} ta to'g'ri</Badge>}
+                {invalidRows.length > 0 && <Badge className="bg-red-500 hover:bg-red-600">{invalidRows.length} ta xato</Badge>}
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Plan & payment status */}
+            {/* Settings */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-semibold mb-1.5 block">Reja *</label>
@@ -268,9 +342,7 @@ export default function BulkImport() {
                   <Skeleton className="h-10 w-full" />
                 ) : (
                   <Select value={planId} onValueChange={setPlanId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Reja tanlang" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Reja tanlang" /></SelectTrigger>
                     <SelectContent>
                       {plans.map(p => (
                         <SelectItem key={p.id} value={p.id.toString()}>
@@ -284,9 +356,7 @@ export default function BulkImport() {
               <div>
                 <label className="text-sm font-semibold mb-1.5 block">To'lov holati</label>
                 <Select value={paymentStatus} onValueChange={setPaymentStatus}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">⚠️ Qarz (to'lanmagan)</SelectItem>
                     <SelectItem value="paid">✅ To'langan</SelectItem>
@@ -303,7 +373,7 @@ export default function BulkImport() {
                     <th className="px-3 py-2 text-left font-semibold">#</th>
                     <th className="px-3 py-2 text-left font-semibold">Ism Familiya</th>
                     <th className="px-3 py-2 text-left font-semibold">Telefon</th>
-                    <th className="px-3 py-2 text-left font-semibold">Kelgan sana</th>
+                    <th className="px-3 py-2 text-left font-semibold">Sana</th>
                     <th className="px-3 py-2 text-left font-semibold">Holat</th>
                   </tr>
                 </thead>
@@ -317,13 +387,11 @@ export default function BulkImport() {
                       <td className="px-3 py-2">
                         {row.error ? (
                           <div className="flex items-center gap-1 text-red-500 text-xs">
-                            <XCircle className="h-3.5 w-3.5 shrink-0" />
-                            <span>{row.error}</span>
+                            <XCircle className="h-3.5 w-3.5 shrink-0" /><span>{row.error}</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1 text-green-600 text-xs">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Tayyor</span>
+                            <CheckCircle2 className="h-3.5 w-3.5" /><span>Tayyor</span>
                           </div>
                         )}
                       </td>
@@ -336,7 +404,7 @@ export default function BulkImport() {
             {invalidRows.length > 0 && (
               <div className="flex items-start gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 rounded-lg p-3 text-sm">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>Xatolik bor satrlar o'tkazib yuboriladi. Faqat {validRows.length} ta to'g'ri satr import qilinadi.</span>
+                <span>Xatolik bor satrlar o'tkazib yuboriladi. Faqat <b>{validRows.length}</b> ta to'g'ri satr import qilinadi.</span>
               </div>
             )}
 
@@ -348,10 +416,7 @@ export default function BulkImport() {
               {loading ? (
                 <span className="animate-pulse">Import qilinmoqda...</span>
               ) : (
-                <>
-                  <Upload className="h-5 w-5" />
-                  {validRows.length} ta a'zoni import qilish
-                </>
+                <><Upload className="h-5 w-5" />{validRows.length} ta a'zoni import qilish</>
               )}
             </Button>
           </CardContent>
@@ -367,8 +432,7 @@ export default function BulkImport() {
               <div>
                 <h3 className="font-bold text-lg">Import muvaffaqiyatli!</h3>
                 <p className="text-muted-foreground text-sm">
-                  {result.imported} ta qo'shildi
-                  {result.skipped > 0 ? `, ${result.skipped} ta o'tkazib yuborildi` : ""}
+                  {result.imported} ta qo'shildi{result.skipped > 0 ? `, ${result.skipped} ta o'tkazib yuborildi` : ""}
                 </p>
               </div>
             </div>
@@ -382,9 +446,7 @@ export default function BulkImport() {
               </div>
             )}
             <Link href="/admin/subscribers">
-              <Button className="olmos-primary-btn gap-2">
-                A'zolar ro'yxatiga o'tish
-              </Button>
+              <Button className="olmos-primary-btn gap-2">A'zolar ro'yxatiga o'tish</Button>
             </Link>
           </CardContent>
         </Card>
