@@ -103,6 +103,11 @@ router.post("/bulk", async (req, res) => {
         endDate.setDate(endDate.getDate() + plan.durationDays);
         const endDateStr = endDate.toISOString().split("T")[0];
 
+        // A'zolik holati bugungi kunga nisbatan hisoblanadi (Toshkent vaqti):
+        // tugash sanasi o'tib ketgan bo'lsa — "muddati tugagan"
+        const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
+        const membershipStatus = endDateStr < todayStr ? "expired" : "active";
+
         const [newSub] = await db.insert(subscribersTable).values({
           firstName,
           lastName,
@@ -112,7 +117,7 @@ router.post("/bulk", async (req, res) => {
           endDate: endDateStr,
           paymentStatus: rowPaymentStatus,
           debtAmount: String(debt),
-          status: "active",
+          status: membershipStatus,
         }).returning();
 
         // To'langan summa bo'lsa, to'lov yozuvi yaratiladi
