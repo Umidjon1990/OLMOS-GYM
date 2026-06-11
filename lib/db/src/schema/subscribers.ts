@@ -12,6 +12,7 @@ export const subscribersTable = pgTable("subscribers", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
   paymentStatus: text("payment_status").notNull().default("pending"),
+  debtAmount: numeric("debt_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   status: text("status").notNull().default("active"),
   telegramChatId: text("telegram_chat_id"),
   notes: text("notes"),

@@ -130,7 +130,7 @@ router.post("/:id/confirm", async (req, res) => {
         const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()));
         newEnd.setDate(newEnd.getDate() + plan.durationDays);
         await db.update(subscribersTable)
-          .set({ endDate: newEnd.toISOString().split("T")[0], status: "active", paymentStatus: "paid", updatedAt: new Date() })
+          .set({ endDate: newEnd.toISOString().split("T")[0], status: "active", paymentStatus: "paid", debtAmount: "0", updatedAt: new Date() })
           .where(eq(subscribersTable.id, payment.subscriberId));
 
         await db.insert(notificationsTable).values({

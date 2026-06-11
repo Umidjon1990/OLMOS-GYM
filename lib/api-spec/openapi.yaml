@@ -744,6 +744,7 @@ components:
         - startDate
         - endDate
         - paymentStatus
+        - debtAmount
         - status
         - daysLeft
         - createdAt
@@ -769,6 +770,8 @@ components:
         paymentStatus:
           type: string
           enum: [paid, pending, overdue]
+        debtAmount:
+          type: number
         status:
           type: string
           enum: [active, expired, pending, blocked]
@@ -1169,6 +1172,8 @@ components:
                 type: string
               startDate:
                 type: string
+              amountPaid:
+                type: number
 
     BulkImportResult:
       type: object

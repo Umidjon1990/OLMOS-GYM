@@ -54,6 +54,7 @@ export interface Subscriber {
   startDate: string;
   endDate: string;
   paymentStatus: SubscriberPaymentStatus;
+  debtAmount: number;
   status: SubscriberStatus;
   daysLeft: number;
   /** @nullable */
@@ -354,6 +355,7 @@ export type BulkImportRequestRowsItem = {
   lastName: string;
   phone: string;
   startDate: string;
+  amountPaid?: number;
 };
 
 export interface BulkImportRequest {

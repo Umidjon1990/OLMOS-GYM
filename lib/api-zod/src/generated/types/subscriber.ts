@@ -18,6 +18,7 @@ export interface Subscriber {
   startDate: Date;
   endDate: Date;
   paymentStatus: SubscriberPaymentStatus;
+  debtAmount: number;
   status: SubscriberStatus;
   daysLeft: number;
   /** @nullable */

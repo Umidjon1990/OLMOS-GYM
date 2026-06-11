@@ -16,7 +16,16 @@ interface ParsedRow {
   lastName: string;
   phone: string;
   startDate: string;
+  amountPaid: number | null;
   error?: string;
+}
+
+function parseAmount(raw: string): number | null {
+  if (!raw || !raw.trim()) return null;
+  // Remove spaces, apostrophes and common thousands separators
+  const cleaned = raw.replace(/[\s'`]/g, "").replace(/,/g, "");
+  const n = Number(cleaned);
+  return Number.isNaN(n) ? null : Math.max(0, n);
 }
 
 interface ImportResult {
@@ -63,20 +72,21 @@ function parseRows(text: string, hasHeader: boolean): ParsedRow[] {
   const dataLines = hasHeader ? lines.slice(1) : lines;
   return dataLines.map((line) => {
     const cols = parseLine(line);
-    const [firstName = "", lastName = "", phone = "", rawDate = ""] = cols;
+    const [firstName = "", lastName = "", phone = "", rawDate = "", rawAmount = ""] = cols;
     const startDate = parseDate(rawDate);
+    const amountPaid = parseAmount(rawAmount);
     const errors: string[] = [];
     if (!firstName) errors.push("Ism bo'sh");
     if (!lastName) errors.push("Familiya bo'sh");
     if (!phone) errors.push("Telefon bo'sh");
     if (!startDate) errors.push(`Sana noto'g'ri: "${rawDate}"`);
-    return { firstName, lastName, phone, startDate: startDate ?? "", error: errors.length ? errors.join("; ") : undefined };
+    return { firstName, lastName, phone, startDate: startDate ?? "", amountPaid, error: errors.length ? errors.join("; ") : undefined };
   });
 }
 
 function downloadTemplate() {
-  const header = "Ism\tFamiliya\tTelefon\tKelgan_sana";
-  const examples = ["Aziz\tKarimov\t+998901234567\t01.06.2026", "Malika\tYusupova\t+998911234567\t15.06.2026"].join("\n");
+  const header = "Ism\tFamiliya\tTelefon\tKelgan_sana\tTolangan_summa";
+  const examples = ["Aziz\tKarimov\t+998901234567\t01.06.2026\t350000", "Malika\tYusupova\t+998911234567\t15.06.2026\t100000"].join("\n");
   const csv = `${header}\n${examples}`;
   const blob = new Blob(["\uFEFF" + csv.replace(/\t/g, ",")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -85,9 +95,9 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
-const TEXT_TEMPLATE = `Ism\tFamiliya\tTelefon\tKelgan_sana
-Aziz\tKarimov\t+998901234567\t01.06.2026
-Malika\tYusupova\t+998911234567\t15.06.2026`;
+const TEXT_TEMPLATE = `Ism\tFamiliya\tTelefon\tKelgan_sana\tTolangan_summa
+Aziz\tKarimov\t+998901234567\t01.06.2026\t350000
+Malika\tYusupova\t+998911234567\t15.06.2026\t100000`;
 
 type InputMode = "file" | "text";
 
@@ -108,6 +118,19 @@ export default function BulkImport() {
 
   const validRows = rows.filter(r => !r.error);
   const invalidRows = rows.filter(r => r.error);
+
+  const selectedPlan = plans?.find(p => p.id.toString() === planId);
+  const planPrice = selectedPlan ? Number(selectedPlan.price) : 0;
+
+  const computeRow = (row: ParsedRow) => {
+    const paid = row.amountPaid != null
+      ? row.amountPaid
+      : (paymentStatus === "paid" ? planPrice : 0);
+    const debt = Math.max(0, planPrice - paid);
+    return { paid, debt };
+  };
+
+  const totalDebt = validRows.reduce((sum, r) => sum + computeRow(r).debt, 0);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -145,7 +168,7 @@ export default function BulkImport() {
         body: JSON.stringify({
           planId: parseInt(planId),
           paymentStatus,
-          rows: validRows.map(r => ({ firstName: r.firstName, lastName: r.lastName, phone: r.phone, startDate: r.startDate })),
+          rows: validRows.map(r => ({ firstName: r.firstName, lastName: r.lastName, phone: r.phone, startDate: r.startDate, amountPaid: r.amountPaid ?? undefined })),
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -206,20 +229,24 @@ export default function BulkImport() {
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 Excel yoki Google Sheets dan nusxa ko'chirib (Ctrl+C) quyidagi maydoniga joylashtiring (Ctrl+V).
-                Ustunlar tartibi: <span className="font-semibold text-foreground">Ism · Familiya · Telefon · Sana</span>
+                Ustunlar tartibi: <span className="font-semibold text-foreground">Ism · Familiya · Telefon · Sana · To'langan summa</span>
               </p>
 
               {/* Format hint */}
               <div className="bg-secondary/60 rounded-lg p-3 text-xs font-mono text-muted-foreground overflow-x-auto whitespace-pre">
-{`Ism         Familiya    Telefon           Sana
-Aziz        Karimov     +998901234567     01.06.2026
-Malika      Yusupova    +998911234567     2026-06-15`}
+{`Ism         Familiya    Telefon           Sana          To'langan
+Aziz        Karimov     +998901234567     01.06.2026    350000
+Malika      Yusupova    +998911234567     2026-06-15    100000`}
               </div>
+              <p className="text-xs text-muted-foreground">
+                💡 <b>To'langan summa</b> rejaning narxidan kam bo'lsa — farqi <b>qarz</b> sifatida yoziladi va a'zo qarzdorlar ro'yxatida turadi.
+                Bo'sh qoldirilsa — pastdagi "To'lov holati" qo'llanadi.
+              </p>
 
               <Textarea
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder={"Ism\tFamiliya\tTelefon\tSana\nAziz\tKarimov\t+998901234567\t01.06.2026"}
+                placeholder={"Ism\tFamiliya\tTelefon\tSana\tTo'langan\nAziz\tKarimov\t+998901234567\t01.06.2026\t350000"}
                 className="font-mono text-sm min-h-[160px] resize-y"
                 spellCheck={false}
               />
@@ -278,8 +305,8 @@ Malika      Yusupova    +998911234567     2026-06-15`}
               </Button>
               <div className="text-xs text-muted-foreground border rounded-lg overflow-x-auto">
                 <table className="w-full">
-                  <thead><tr className="bg-secondary/50">{["Ism","Familiya","Telefon","Kelgan_sana"].map(h=><th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>)}</tr></thead>
-                  <tbody><tr className="border-t"><td className="px-3 py-1.5">Aziz</td><td className="px-3 py-1.5">Karimov</td><td className="px-3 py-1.5">+998901234567</td><td className="px-3 py-1.5">01.06.2026</td></tr></tbody>
+                  <thead><tr className="bg-secondary/50">{["Ism","Familiya","Telefon","Kelgan_sana","Tolangan_summa"].map(h=><th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>)}</tr></thead>
+                  <tbody><tr className="border-t"><td className="px-3 py-1.5">Aziz</td><td className="px-3 py-1.5">Karimov</td><td className="px-3 py-1.5">+998901234567</td><td className="px-3 py-1.5">01.06.2026</td><td className="px-3 py-1.5">350000</td></tr></tbody>
                 </table>
               </div>
             </CardContent>
@@ -374,29 +401,50 @@ Malika      Yusupova    +998911234567     2026-06-15`}
                     <th className="px-3 py-2 text-left font-semibold">Ism Familiya</th>
                     <th className="px-3 py-2 text-left font-semibold">Telefon</th>
                     <th className="px-3 py-2 text-left font-semibold">Sana</th>
+                    <th className="px-3 py-2 text-right font-semibold">To'langan</th>
+                    <th className="px-3 py-2 text-right font-semibold">Qarz</th>
                     <th className="px-3 py-2 text-left font-semibold">Holat</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, i) => (
+                  {rows.map((row, i) => {
+                    const { paid, debt } = computeRow(row);
+                    return (
                     <tr key={i} className={`border-t ${row.error ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
                       <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
                       <td className="px-3 py-2 font-medium">{row.firstName} {row.lastName}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.phone}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.startDate || "—"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.error ? "—" : selectedPlan ? `${paid.toLocaleString("uz")}` : <span className="text-muted-foreground text-xs">reja?</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.error ? "—" : !selectedPlan ? <span className="text-muted-foreground text-xs">—</span> : debt > 0 ? (
+                          <span className="text-red-500 font-semibold">{debt.toLocaleString("uz")}</span>
+                        ) : (
+                          <span className="text-green-600">0</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         {row.error ? (
                           <div className="flex items-center gap-1 text-red-500 text-xs">
                             <XCircle className="h-3.5 w-3.5 shrink-0" /><span>{row.error}</span>
                           </div>
+                        ) : !selectedPlan ? (
+                          <span className="text-muted-foreground text-xs">Reja tanlang</span>
+                        ) : debt > 0 ? (
+                          <div className="flex items-center gap-1 text-amber-600 text-xs">
+                            <AlertCircle className="h-3.5 w-3.5" /><span>Qarzdor</span>
+                          </div>
                         ) : (
                           <div className="flex items-center gap-1 text-green-600 text-xs">
-                            <CheckCircle2 className="h-3.5 w-3.5" /><span>Tayyor</span>
+                            <CheckCircle2 className="h-3.5 w-3.5" /><span>To'langan</span>
                           </div>
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -405,6 +453,13 @@ Malika      Yusupova    +998911234567     2026-06-15`}
               <div className="flex items-start gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 rounded-lg p-3 text-sm">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>Xatolik bor satrlar o'tkazib yuboriladi. Faqat <b>{validRows.length}</b> ta to'g'ri satr import qilinadi.</span>
+              </div>
+            )}
+
+            {selectedPlan && validRows.length > 0 && totalDebt > 0 && (
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-950/20 rounded-lg p-3 text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>Jami qarz: <b>{totalDebt.toLocaleString("uz")} so'm</b> — bu a'zolar qarzdorlar ro'yxatida ko'rinadi.</span>
               </div>
             )}
 

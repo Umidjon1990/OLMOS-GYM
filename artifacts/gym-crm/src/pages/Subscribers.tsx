@@ -181,6 +181,11 @@ export default function Subscribers() {
                           <CreditCard className="h-3.5 w-3.5" />
                           <span>{getPaymentLabel(sub.paymentStatus)}</span>
                         </div>
+                        {sub.debtAmount > 0 && (
+                          <div className="flex items-center gap-1 text-red-500 font-bold bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded-md w-full justify-center mt-1">
+                            <span>Qarz: {sub.debtAmount.toLocaleString("uz")} so'm</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

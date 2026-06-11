@@ -19,6 +19,7 @@ function calcDaysLeft(endDate: string): number {
 async function formatSubscriber(subscriber: typeof subscribersTable.$inferSelect, planName: string) {
   return {
     ...subscriber,
+    debtAmount: Number(subscriber.debtAmount),
     planName,
     daysLeft: calcDaysLeft(subscriber.endDate),
   };
@@ -49,11 +50,9 @@ router.get("/", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(sql`${subscribersTable.createdAt} DESC`);
 
-    const result = rows.map(({ subscriber, planName }) => ({
-      ...subscriber,
-      planName: planName ?? "Unknown",
-      daysLeft: calcDaysLeft(subscriber.endDate),
-    }));
+    const result = await Promise.all(
+      rows.map(({ subscriber, planName }) => formatSubscriber(subscriber, planName ?? "Unknown"))
+    );
 
     res.json(result);
   } catch (err) {
@@ -67,7 +66,7 @@ router.post("/bulk", async (req, res) => {
     const { planId, paymentStatus = "pending", rows } = req.body as {
       planId: number;
       paymentStatus?: "paid" | "pending";
-      rows: { firstName: string; lastName: string; phone: string; startDate: string }[];
+      rows: { firstName: string; lastName: string; phone: string; startDate: string; amountPaid?: number }[];
     };
 
     if (!planId || !Array.isArray(rows) || rows.length === 0) {
@@ -76,6 +75,8 @@ router.post("/bulk", async (req, res) => {
 
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
     if (!plan) return res.status(404).json({ error: "Reja topilmadi" });
+
+    const planPrice = Number(plan.price);
 
     let imported = 0;
     let skipped = 0;
@@ -89,6 +90,15 @@ router.post("/bulk", async (req, res) => {
           errors.push(`${firstName} ${lastName}: Ma'lumotlar to'liq emas`);
           continue;
         }
+
+        // To'langan summa: agar ko'rsatilmagan bo'lsa, paymentStatus ga qarab default
+        const paid = row.amountPaid != null && !Number.isNaN(Number(row.amountPaid))
+          ? Math.max(0, Number(row.amountPaid))
+          : (paymentStatus === "paid" ? planPrice : 0);
+
+        const debt = Math.max(0, planPrice - paid);
+        const rowPaymentStatus = debt <= 0 ? "paid" : "pending";
+
         const endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + plan.durationDays);
         const endDateStr = endDate.toISOString().split("T")[0];
@@ -100,15 +110,17 @@ router.post("/bulk", async (req, res) => {
           planId,
           startDate,
           endDate: endDateStr,
-          paymentStatus,
+          paymentStatus: rowPaymentStatus,
+          debtAmount: String(debt),
           status: "active",
         }).returning();
 
-        if (paymentStatus === "paid") {
+        // To'langan summa bo'lsa, to'lov yozuvi yaratiladi
+        if (paid > 0) {
           await db.insert(paymentsTable).values({
             subscriberId: newSub.id,
             planId,
-            amount: String(plan.price),
+            amount: String(paid),
             paymentDate: startDate,
             status: "confirmed",
             extendSubscription: false,
@@ -139,11 +151,7 @@ router.post("/", async (req, res) => {
       endDate: endDate instanceof Date ? endDate.toISOString().split("T")[0] : endDate,
     }).returning();
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, subscriber.planId));
-    res.status(201).json({
-      ...subscriber,
-      planName: plan?.name ?? "Unknown",
-      daysLeft: calcDaysLeft(subscriber.endDate),
-    });
+    res.status(201).json(await formatSubscriber(subscriber, plan?.name ?? "Unknown"));
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.issues });
     req.log.error({ err }, "Failed to create subscriber");
@@ -162,11 +170,7 @@ router.get("/:id", async (req, res) => {
 
     if (!row) return res.status(404).json({ error: "Subscriber not found" });
 
-    res.json({
-      ...row.subscriber,
-      planName: row.planName ?? "Unknown",
-      daysLeft: calcDaysLeft(row.subscriber.endDate),
-    });
+    res.json(await formatSubscriber(row.subscriber, row.planName ?? "Unknown"));
   } catch (err) {
     req.log.error({ err }, "Failed to get subscriber");
     res.status(500).json({ error: "Failed to get subscriber" });
@@ -192,11 +196,7 @@ router.patch("/:id", async (req, res) => {
     if (!updated) return res.status(404).json({ error: "Subscriber not found" });
 
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, updated.planId));
-    res.json({
-      ...updated,
-      planName: plan?.name ?? "Unknown",
-      daysLeft: calcDaysLeft(updated.endDate),
-    });
+    res.json(await formatSubscriber(updated, plan?.name ?? "Unknown"));
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.issues });
     req.log.error({ err }, "Failed to update subscriber");

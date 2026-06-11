@@ -1,0 +1,1 @@
+- [Subscriber serialization](subscriber-serialization.md) — all subscriber API responses must go through formatSubscriber so numeric columns (debtAmount, price) stay Number, not pg strings.

@@ -11,4 +11,5 @@ export type BulkImportRequestRowsItem = {
   lastName: string;
   phone: string;
   startDate: string;
+  amountPaid?: number;
 };

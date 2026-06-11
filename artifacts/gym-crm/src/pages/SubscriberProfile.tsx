@@ -212,6 +212,14 @@ export default function SubscriberProfile() {
                     </Badge>
                   </div>
                 </div>
+                {subscriber.debtAmount > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Qarz</span>
+                    <div className="font-bold text-xl text-red-500 mt-1">
+                      {subscriber.debtAmount.toLocaleString("uz")} so'm
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
