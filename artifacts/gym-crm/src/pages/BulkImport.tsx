@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useListPlans, getListPlansQueryKey, getListSubscribersQueryKey } from "@workspace/api-client-react";
 import { Upload, Download, CheckCircle2, XCircle, AlertCircle, ArrowLeft, FileSpreadsheet, ClipboardPaste, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,8 +76,6 @@ function parseRows(text: string, hasHeader: boolean): ParsedRow[] {
     const startDate = parseDate(rawDate);
     const amountPaid = parseAmount(rawAmount);
     const errors: string[] = [];
-    if (!firstName) errors.push("Ism bo'sh");
-    if (!lastName) errors.push("Familiya bo'sh");
     if (!phone) errors.push("Telefon bo'sh");
     if (!startDate) errors.push(`Sana noto'g'ri: "${rawDate}"`);
     return { firstName, lastName, phone, startDate: startDate ?? "", amountPaid, error: errors.length ? errors.join("; ") : undefined };
@@ -115,6 +113,12 @@ export default function BulkImport() {
   const [fileName, setFileName] = useState<string>("");
   const [pasteText, setPasteText] = useState<string>(TEXT_TEMPLATE);
   const [hasHeader, setHasHeader] = useState(true);
+
+  useEffect(() => {
+    if (plans && plans.length > 0 && !planId) {
+      setPlanId(plans[0].id.toString());
+    }
+  }, [plans, planId]);
 
   const validRows = rows.filter(r => !r.error);
   const invalidRows = rows.filter(r => r.error);
