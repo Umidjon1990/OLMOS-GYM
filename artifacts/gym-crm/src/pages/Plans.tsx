@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -29,6 +30,7 @@ export default function Plans() {
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<any>(null);
 
@@ -55,6 +57,29 @@ export default function Plans() {
     setOpen(true);
   };
 
+  const onError = (err: unknown) => {
+    const status =
+      err && typeof err === "object" && "status" in err
+        ? (err as { status?: number }).status
+        : undefined;
+    if (status === 401) {
+      toast({
+        variant: "destructive",
+        title: "Sessiya tugagan",
+        description: "Iltimos, qaytadan tizimga kiring.",
+      });
+      setLocation("/login");
+      return;
+    }
+    const message =
+      err instanceof Error ? err.message : "Noma'lum xatolik yuz berdi";
+    toast({
+      variant: "destructive",
+      title: "Saqlab bo'lmadi",
+      description: message,
+    });
+  };
+
   const onSubmit = (values: z.infer<typeof planSchema>) => {
     if (editingPlan) {
       updatePlan.mutate(
@@ -62,9 +87,10 @@ export default function Plans() {
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
-            toast({ title: "Plan updated" });
+            toast({ title: "Reja yangilandi" });
             setOpen(false);
-          }
+          },
+          onError,
         }
       );
     } else {
@@ -73,12 +99,21 @@ export default function Plans() {
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
-            toast({ title: "Plan created" });
+            toast({ title: "Reja yaratildi" });
             setOpen(false);
-          }
+          },
+          onError,
         }
       );
     }
+  };
+
+  const onInvalid = () => {
+    toast({
+      variant: "destructive",
+      title: "Maydonlarni tekshiring",
+      description: "Iltimos, barcha majburiy maydonlarni to'g'ri to'ldiring.",
+    });
   };
 
   const toggleActive = (id: number, isActive: boolean) => {
@@ -87,8 +122,9 @@ export default function Plans() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
-          toast({ title: isActive ? "Plan activated" : "Plan deactivated" });
-        }
+          toast({ title: isActive ? "Reja faollashtirildi" : "Reja o'chirildi" });
+        },
+        onError,
       }
     );
   };
@@ -109,7 +145,7 @@ export default function Plans() {
             <DialogTitle>{editingPlan ? "Edit Plan" : "Create New Plan"}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Plan Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />

@@ -1,3 +1,4 @@
 - [Subscriber serialization](subscriber-serialization.md) — all subscriber API responses must go through formatSubscriber so numeric columns (debtAmount, price) stay Number, not pg strings.
 - [Admin auth route gating](auth-route-gating.md) — method-only allowlist leaks admin endpoints sharing a public method; use path-aware allowWhen for mixed routers.
 - [Railway/nixpacks pnpm](railway-nixpacks-pnpm.md) — install pnpm via nixPkgs (not corepack/npm -g); corepack keyid + npm-global-PATH + nodejs_24 all fail.
+- [Gym CRM admin silent failures](gym-crm-auth-silent-failures.md) — "Save button does nothing" = silent mutation failure; public GET + auth-gated POST + missing onError, not broken wiring.
