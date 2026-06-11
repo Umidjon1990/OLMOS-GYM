@@ -1,15 +1,8 @@
-[variables]
-COREPACK_INTEGRITY_KEYS = "0"
-
 [phases.setup]
-nixPkgs = ["nodejs_24"]
+nixPkgs = ["nodejs_22", "pnpm"]
 
 [phases.install]
-cmds = [
-  "corepack enable",
-  "corepack prepare pnpm@10.26.1 --activate",
-  "pnpm install --frozen-lockfile",
-]
+cmds = ["pnpm install --frozen-lockfile"]
 
 [phases.build]
 cmds = ["pnpm run build:railway"]
