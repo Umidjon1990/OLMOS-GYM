@@ -1,11 +1,17 @@
+[variables]
+PNPM_HOME = "/root/.local/share/pnpm"
+
 [phases.setup]
-nixPkgs = ["nodejs_22", "pnpm"]
+nixPkgs = ["nodejs_22", "curl"]
 
 [phases.install]
-cmds = ["pnpm install --frozen-lockfile"]
+cmds = [
+  "curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.26.1 SHELL=sh sh -",
+  "/root/.local/share/pnpm/pnpm install --frozen-lockfile",
+]
 
 [phases.build]
-cmds = ["pnpm run build:railway"]
+cmds = ["/root/.local/share/pnpm/pnpm run build:railway"]
 
 [start]
 cmd = "node --enable-source-maps artifacts/api-server/dist/index.mjs"

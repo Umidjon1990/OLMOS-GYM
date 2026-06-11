@@ -2,10 +2,10 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pnpm run build:railway"
+    "buildCommand": "/root/.local/share/pnpm/pnpm run build:railway"
   },
   "deploy": {
-    "releaseCommand": "pnpm --filter @workspace/db run push-force",
+    "releaseCommand": "/root/.local/share/pnpm/pnpm --filter @workspace/db run push-force",
     "startCommand": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
