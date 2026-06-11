@@ -43,8 +43,9 @@ router.post("/", async (req, res) => {
     res.status(201).json({ ...plan, price: parseFloat(String(plan.price)), subscriberCount: 0 });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.issues });
+    const detail = err instanceof Error ? err.message : String(err);
     req.log.error({ err }, "Failed to create plan");
-    res.status(500).json({ error: "Failed to create plan" });
+    res.status(500).json({ error: "Failed to create plan", detail });
   }
 });
 
