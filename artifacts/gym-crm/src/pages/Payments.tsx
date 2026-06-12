@@ -8,7 +8,7 @@ import {
   getListSubscribersQueryKey,
   getListPlansQueryKey,
 } from "@workspace/api-client-react";
-import { Check, CreditCard, Calendar, Plus } from "lucide-react";
+import { Check, CreditCard, Calendar, Plus, ChevronsUpDown, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,10 +17,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { format } from "date-fns";
-import { useState } from "react";
+import { format, addDays } from "date-fns";
+import { useState, useMemo } from "react";
 import { useSearch } from "wouter";
 
 export default function Payments() {
@@ -39,6 +41,7 @@ export default function Payments() {
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
   const [subscriberId, setSubscriberId] = useState<string>("");
   const [planId, setPlanId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
@@ -46,6 +49,35 @@ export default function Payments() {
 
   const { data: subscribers } = useListSubscribers({}, { query: { queryKey: getListSubscribersQueryKey({}) } });
   const { data: plans } = useListPlans({ query: { queryKey: getListPlansQueryKey() } });
+
+  const selectedSubscriber = useMemo(
+    () => subscribers?.find(s => s.id.toString() === subscriberId),
+    [subscribers, subscriberId]
+  );
+
+  const selectedPlan = useMemo(
+    () => plans?.find(p => p.id.toString() === planId),
+    [plans, planId]
+  );
+
+  const newEndDate = useMemo(() => {
+    if (!selectedSubscriber?.endDate || !selectedPlan?.durationDays) return null;
+    const base = new Date(selectedSubscriber.endDate);
+    return addDays(base, selectedPlan.durationDays);
+  }, [selectedSubscriber, selectedPlan]);
+
+  const handleSubscriberSelect = (sid: string) => {
+    setSubscriberId(sid);
+    setSubOpen(false);
+    const sub = subscribers?.find(s => s.id.toString() === sid);
+    if (sub) {
+      const matchingPlan = plans?.find(p => p.id === sub.planId);
+      if (matchingPlan) {
+        setPlanId(matchingPlan.id.toString());
+        setAmount(matchingPlan.price.toString());
+      }
+    }
+  };
 
   const handlePlanChange = (pid: string) => {
     setPlanId(pid);
@@ -59,6 +91,7 @@ export default function Payments() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListSubscribersQueryKey({}) });
           toast({ title: "To'lov tasdiqlandi" });
         },
         onError: () => toast({ title: "Tasdiqlashda xatolik", variant: "destructive" })
@@ -81,6 +114,7 @@ export default function Payments() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListSubscribersQueryKey({}) });
           toast({ title: "To'lov muvaffaqiyatli qo'shildi" });
           setOpen(false);
           setSubscriberId("");
@@ -127,7 +161,7 @@ export default function Payments() {
             ))}
           </div>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setSubscriberId(""); setPlanId(""); setAmount(""); setPaymentDate(new Date().toISOString().split("T")[0]); } }}>
           <DialogTrigger asChild>
             <Button className="olmos-primary-btn gap-1">
               <Plus className="h-4 w-4" />
@@ -139,21 +173,75 @@ export default function Payments() {
               <DialogTitle>Yangi to'lov qo'shish</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
+
+              {/* Subscriber combobox with search */}
               <div>
                 <Label>A'zo</Label>
-                <Select value={subscriberId} onValueChange={setSubscriberId}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="A'zo tanlang" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subscribers?.map(s => (
-                      <SelectItem key={s.id} value={s.id.toString()}>
-                        {s.firstName} {s.lastName} ({s.phone})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={subOpen} onOpenChange={setSubOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full mt-1 justify-between font-normal h-10"
+                    >
+                      {selectedSubscriber
+                        ? `${selectedSubscriber.firstName} ${selectedSubscriber.lastName}`.trim() || selectedSubscriber.phone || "A'zo"
+                        : "A'zo qidiring..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Ism, familiya yoki telefon..." />
+                      <CommandList>
+                        <CommandEmpty>
+                          <div className="flex flex-col items-center py-4 text-muted-foreground">
+                            <Search className="h-8 w-8 mb-2 opacity-30" />
+                            <p className="text-sm">A'zo topilmadi</p>
+                          </div>
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {subscribers?.map(s => {
+                            const name = `${s.firstName} ${s.lastName}`.trim() || "Noma'lum";
+                            return (
+                              <CommandItem
+                                key={s.id}
+                                value={`${s.firstName} ${s.lastName} ${s.phone}`}
+                                onSelect={() => handleSubscriberSelect(s.id.toString())}
+                                className="flex flex-col items-start gap-0.5 cursor-pointer"
+                              >
+                                <span className="font-medium">{name}</span>
+                                <span className="text-xs text-muted-foreground">{s.phone || "—"}</span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Subscriber info: current end date */}
+                {selectedSubscriber && (
+                  <div className="mt-2 text-xs rounded-lg border border-border bg-secondary/50 px-3 py-2 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Joriy muddat tugashi:</span>
+                      <span className="font-semibold text-amber-600">
+                        {format(new Date(selectedSubscriber.endDate), 'dd.MM.yyyy')}
+                      </span>
+                    </div>
+                    {newEndDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Yangi muddat tugashi:</span>
+                        <span className="font-semibold text-green-600">
+                          {format(newEndDate, 'dd.MM.yyyy')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
               <div>
                 <Label>Reja</Label>
                 <Select value={planId} onValueChange={handlePlanChange}>
@@ -169,6 +257,7 @@ export default function Payments() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <Label>Miqdor (so'm)</Label>
                 <Input
@@ -179,15 +268,20 @@ export default function Payments() {
                   placeholder="150000"
                 />
               </div>
+
               <div>
-                <Label>To'lov sanasi</Label>
+                <Label>To'lov qabul qilingan sana</Label>
                 <Input
                   type="date"
                   value={paymentDate}
                   onChange={e => setPaymentDate(e.target.value)}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bu admin to'lovni qabul qilgan sana. Obuna muddati a'zoning oxirgi tugash sanasidan hisoblanadi.
+                </p>
               </div>
+
               <Button
                 className="w-full olmos-primary-btn"
                 onClick={handleCreate}

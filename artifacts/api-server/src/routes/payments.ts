@@ -126,8 +126,9 @@ router.post("/:id/confirm", async (req, res) => {
       const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, payment.planId));
       const [subscriber] = await db.select().from(subscribersTable).where(eq(subscribersTable.id, payment.subscriberId));
       if (plan && subscriber) {
+        // Yangi muddat har doim oxirgi tugash sanasidan hisoblanadi (to'langan sanadan emas)
         const currentEnd = new Date(subscriber.endDate);
-        const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()));
+        const newEnd = new Date(currentEnd);
         newEnd.setDate(newEnd.getDate() + plan.durationDays);
         await db.update(subscribersTable)
           .set({ endDate: newEnd.toISOString().split("T")[0], status: "active", paymentStatus: "paid", debtAmount: "0", updatedAt: new Date() })
