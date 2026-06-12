@@ -230,6 +230,8 @@ router.delete("/bulk", async (req, res) => {
   try {
     const { ids } = req.body as { ids: number[] };
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    // Avval bog'liq to'lovlarni o'chirish (foreign key constraint)
+    await db.delete(paymentsTable).where(inArray(paymentsTable.subscriberId, ids));
     await db.delete(subscribersTable).where(inArray(subscribersTable.id, ids));
     res.status(204).send();
   } catch (err) {
@@ -241,6 +243,8 @@ router.delete("/bulk", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    // Avval bog'liq to'lovlarni o'chirish (foreign key constraint)
+    await db.delete(paymentsTable).where(eq(paymentsTable.subscriberId, id));
     await db.delete(subscribersTable).where(eq(subscribersTable.id, id));
     res.status(204).send();
   } catch (err) {
