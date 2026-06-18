@@ -25,6 +25,7 @@ type Step =
   | "add_plan"
   | "add_payment_status"
   | "pay_phone"
+  | "pay_amount"
   | "member_phone";
 
 interface State {
@@ -128,12 +129,14 @@ async function showMemberInfo(chatId: number) {
 }
 
 async function linkMemberByPhone(chatId: number, phone: string) {
-  const clean = phone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+  // Faqat raqamlarni qoldirib, oxirgi 9 tasini olish (moslashuvchan qidiruv)
+  const digitsOnly = phone.replace(/[^\d]/g, "");
+  const searchStr = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : digitsOnly;
   const rows = await db
     .select({ sub: subscribersTable, planName: plansTable.name })
     .from(subscribersTable)
     .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
-    .where(ilike(subscribersTable.phone, `%${clean}%`));
+    .where(ilike(subscribersTable.phone, `%${searchStr}%`));
 
   if (rows.length === 0) {
     await bot!.sendMessage(
@@ -311,12 +314,13 @@ async function sendStats(chatId: number) {
 
 // ─── Admin: payment search ────────────────────────────────────────────────────
 async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
-  const clean = phone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+  const digitsOnly = phone.replace(/[^\d]/g, "");
+  const searchStr = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : digitsOnly;
   const rows = await db
     .select({ sub: subscribersTable, planName: plansTable.name })
     .from(subscribersTable)
     .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
-    .where(ilike(subscribersTable.phone, `%${clean}%`));
+    .where(ilike(subscribersTable.phone, `%${searchStr}%`));
 
   if (rows.length === 0) {
     await bot!.sendMessage(
@@ -346,7 +350,7 @@ async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
           ...plans.map((p) => [
             {
               text: `💳 ${p.name} — ${Number(p.price).toLocaleString("uz")} so'm`,
-              callback_data: `pay_confirm_${sub.id}_${p.id}_${p.price}`,
+              callback_data: `pay_ask_amount_${sub.id}_${p.id}_${p.price}`,
             },
           ]),
           [{ text: "❌ Bekor qilish", callback_data: "pay_cancel" }],
@@ -635,6 +639,82 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
 
+      // ── Admin: partial payment amount input ─────────────────────────────────
+      if (state.step === "pay_amount") {
+        const { subId, planId, planPrice } = state.data as Record<string, number | string>;
+        const parsed = parseFloat(String(text).replace(/\s/g, "").replace(",", "."));
+        if (isNaN(parsed) || parsed <= 0) {
+          await bot!.sendMessage(
+            chatId,
+            `❌ Noto'g'ri miqdor. Raqam kiriting (masalan: ${Number(planPrice).toLocaleString("uz")}):`,
+            { reply_markup: { force_reply: true } }
+          );
+          return;
+        }
+        const amount = parsed;
+        const debt = Math.max(0, Number(planPrice) - amount);
+        const paymentStatus = debt <= 0 ? "paid" : "pending";
+        const today = new Date().toISOString().split("T")[0];
+
+        const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, Number(planId)));
+        const [sub] = await db.select().from(subscribersTable).where(eq(subscribersTable.id, Number(subId)));
+        if (!plan || !sub) {
+          await bot!.sendMessage(chatId, "❌ Ma'lumot topilmadi.", ADMIN_KEYBOARD);
+          resetState(chatId);
+          return;
+        }
+
+        await db.insert(paymentsTable).values({
+          subscriberId: Number(subId), planId: Number(planId),
+          amount: String(amount), paymentDate: today,
+          status: "confirmed", extendSubscription: true,
+        });
+
+        const currentEnd = new Date(sub.endDate);
+        const newEnd = new Date(currentEnd);
+        newEnd.setDate(newEnd.getDate() + plan.durationDays);
+        const newEndStr = newEnd.toISOString().split("T")[0];
+
+        await db.update(subscribersTable)
+          .set({
+            endDate: newEndStr, status: "active",
+            paymentStatus, debtAmount: String(debt),
+            updatedAt: new Date(),
+          })
+          .where(eq(subscribersTable.id, Number(subId)));
+
+        await db.insert(notificationsTable).values({
+          message: `To'lov (bot): ${sub.firstName} ${sub.lastName} — ${plan.name} — ${amount.toLocaleString("uz")} so'm${debt > 0 ? ` (qarz: ${debt.toLocaleString("uz")} so'm)` : ""}`,
+          type: "payment_confirmed", subscriberId: Number(subId),
+          subscriberName: `${sub.firstName} ${sub.lastName}`,
+        });
+
+        if (sub.telegramChatId) {
+          await bot!.sendMessage(
+            sub.telegramChatId,
+            `✅ *To'lovingiz qabul qilindi!*\n\n` +
+            `💎 Reja: ${plan.name}\n` +
+            `💰 To'landi: ${amount.toLocaleString("uz")} so'm\n` +
+            `📅 Obuna: ${newEndStr} gacha` +
+            (debt > 0 ? `\n⚠️ Qarz: ${debt.toLocaleString("uz")} so'm` : ""),
+            { parse_mode: "Markdown" }
+          );
+        }
+
+        resetState(chatId);
+        await bot!.sendMessage(
+          chatId,
+          `✅ *To'lov qabul qilindi!*\n\n` +
+          `👤 ${sub.firstName} ${sub.lastName}\n` +
+          `💎 ${plan.name}\n` +
+          `💰 To'landi: *${amount.toLocaleString("uz")} so'm*\n` +
+          (debt > 0 ? `⚠️ Qarz: *${debt.toLocaleString("uz")} so'm*\n` : "") +
+          `📅 → ${newEndStr}`,
+          { parse_mode: "Markdown", ...ADMIN_KEYBOARD }
+        );
+        return;
+      }
+
       // ── Admin: main menu buttons ───────────────────────────────────────────
       if (text === "➕ Obunachi qo'shish") {
         state.step = "add_first_name";
@@ -788,13 +868,13 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
 
-      // Payment confirmation: pay_confirm_{subId}_{planId}_{price}
-      if (data.startsWith("pay_confirm_")) {
+      // Payment — ask for amount: pay_ask_amount_{subId}_{planId}_{price}
+      if (data.startsWith("pay_ask_amount_")) {
         const parts = data.split("_");
-        const subId = parseInt(parts[2]);
-        const planId = parseInt(parts[3]);
-        const price = parts[4];
-        const today = new Date().toISOString().split("T")[0];
+        // pay_ask_amount_<subId>_<planId>_<price>
+        const subId = parseInt(parts[3]);
+        const planId = parseInt(parts[4]);
+        const price = parts[5];
 
         const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
         const [sub] = await db.select().from(subscribersTable).where(eq(subscribersTable.id, subId));
@@ -803,45 +883,21 @@ export function initTelegramBot(): TelegramBot | null {
           return;
         }
 
-        await db.insert(paymentsTable).values({
-          subscriberId: subId, planId, amount: price,
-          paymentDate: today, status: "confirmed", extendSubscription: true,
-        });
+        const state = getState(chatId);
+        state.step = "pay_amount";
+        state.data = { subId, planId, planPrice: price };
 
-        // Yangi muddat har doim oxirgi tugash sanasidan hisoblanadi
-        const currentEnd = new Date(sub.endDate);
-        const newEnd = new Date(currentEnd);
-        newEnd.setDate(newEnd.getDate() + plan.durationDays);
-        const newEndStr = newEnd.toISOString().split("T")[0];
-
-        await db.update(subscribersTable)
-          .set({ endDate: newEndStr, status: "active", paymentStatus: "paid", updatedAt: new Date() })
-          .where(eq(subscribersTable.id, subId));
-
-        await db.insert(notificationsTable).values({
-          message: `To'lov tasdiqlandi (bot orqali): ${sub.firstName} ${sub.lastName} — ${plan.name}`,
-          type: "payment_confirmed", subscriberId: subId,
-          subscriberName: `${sub.firstName} ${sub.lastName}`,
-        });
-
-        // Notify the member if they have Telegram linked
-        if (sub.telegramChatId) {
-          await bot!.sendMessage(
-            sub.telegramChatId,
-            `✅ *To'lovingiz qabul qilindi!*\n\n` +
-              `💎 Reja: ${plan.name}\n` +
-              `💰 Miqdor: ${Number(price).toLocaleString("uz")} so'm\n` +
-              `📅 Obuna muddati: ${newEndStr} gacha`,
-            { parse_mode: "Markdown", ...MEMBER_KEYBOARD }
-          );
-        }
-
-        resetState(chatId);
+        const name = `${sub.firstName} ${sub.lastName}`.trim();
+        const daysLeft = Math.floor((new Date(sub.endDate).getTime() - Date.now()) / 86400000);
         await bot!.sendMessage(
           chatId,
-          `✅ *To'lov qabul qilindi!*\n\n👤 ${sub.firstName} ${sub.lastName}\n` +
-            `💎 ${plan.name}\n💰 ${Number(price).toLocaleString("uz")} so'm\n📅 → ${newEndStr}`,
-          { parse_mode: "Markdown", ...ADMIN_KEYBOARD }
+          `👤 *${name}*\n` +
+          `💎 Tanlangan reja: *${plan.name}*\n` +
+          `💰 To'liq narx: *${Number(price).toLocaleString("uz")} so'm*\n` +
+          `📅 Obuna: ${sub.endDate} (${daysLeft >= 0 ? `${daysLeft} kun qoldi` : "muddati o'tgan"})\n\n` +
+          `💵 Qabul qilingan *summani* kiriting:\n` +
+          `_(Qisman to'lov bo'lsa, qolgan qism qarzga yoziladi)_`,
+          { parse_mode: "Markdown", reply_markup: { force_reply: true } }
         );
         return;
       }
