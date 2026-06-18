@@ -218,7 +218,7 @@ export default function Subscribers() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
-          <SelectTrigger className="w-full sm:w-[180px] h-11">
+          <SelectTrigger className="w-full sm:w-[160px] h-11">
             <SelectValue placeholder="Holat" />
           </SelectTrigger>
           <SelectContent>
@@ -229,6 +229,17 @@ export default function Subscribers() {
             <SelectItem value="blocked">Bloklangan</SelectItem>
           </SelectContent>
         </Select>
+        <button
+          onClick={() => setPaymentFilter(paymentFilter === "pending" ? "" : "pending")}
+          className={`h-11 px-3 rounded-lg border text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+            paymentFilter === "pending"
+              ? "bg-red-500 text-white border-red-500"
+              : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-primary"
+          }`}
+        >
+          <CreditCard className="h-4 w-4" />
+          Qarzdorlar
+        </button>
       </div>
 
       {isLoading ? (
@@ -276,7 +287,13 @@ export default function Subscribers() {
                               {getStatusLabel(sub.status)}
                             </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground truncate">{sub.phone || "—"}</p>
+                          <a
+                            href={`tel:${sub.phone}`}
+                            className="text-sm text-primary underline underline-offset-2 hover:opacity-80 active:opacity-60 transition-opacity truncate"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {sub.phone || "—"}
+                          </a>
 
                           <div className="flex items-center gap-3 mt-3 text-xs font-medium flex-wrap">
                             <div className="flex items-center gap-1.5 bg-secondary px-2 py-1 rounded-md">

@@ -160,7 +160,12 @@ export default function SubscriberProfile() {
               <div className="mt-6 space-y-3 text-sm">
                 <div className="flex items-center gap-3 text-slate-600">
                   <Phone className="h-4 w-4 shrink-0" />
-                  <span>{subscriber.phone}</span>
+                  <a
+                    href={`tel:${subscriber.phone}`}
+                    className="text-primary underline underline-offset-2 hover:opacity-80 active:opacity-60 transition-opacity"
+                  >
+                    {subscriber.phone}
+                  </a>
                 </div>
                 {subscriber.telegramChatId && (
                   <div className="flex items-center gap-3 text-slate-600">

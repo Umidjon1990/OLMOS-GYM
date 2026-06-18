@@ -132,11 +132,12 @@ async function linkMemberByPhone(chatId: number, phone: string) {
   // Faqat raqamlarni qoldirib, oxirgi 9 tasini olish (moslashuvchan qidiruv)
   const digitsOnly = phone.replace(/[^\d]/g, "");
   const searchStr = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : digitsOnly;
+  // regexp_replace bilan bazadagi raqamdan ham bo'shliq/defis olib tashlab qidiradi
   const rows = await db
     .select({ sub: subscribersTable, planName: plansTable.name })
     .from(subscribersTable)
     .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
-    .where(ilike(subscribersTable.phone, `%${searchStr}%`));
+    .where(sql`regexp_replace(${subscribersTable.phone}, '[^0-9]', '', 'g') ILIKE ${'%' + searchStr + '%'}`);
 
   if (rows.length === 0) {
     await bot!.sendMessage(
@@ -320,7 +321,7 @@ async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
     .select({ sub: subscribersTable, planName: plansTable.name })
     .from(subscribersTable)
     .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
-    .where(ilike(subscribersTable.phone, `%${searchStr}%`));
+    .where(sql`regexp_replace(${subscribersTable.phone}, '[^0-9]', '', 'g') ILIKE ${'%' + searchStr + '%'}`);
 
   if (rows.length === 0) {
     await bot!.sendMessage(
