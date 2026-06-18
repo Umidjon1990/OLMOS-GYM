@@ -43,18 +43,58 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const body = CreatePaymentBody.parse(req.body);
+    const extendSub = body.extendSubscription ?? true;
+
+    // To'lov yaratilishi = bir zumda tasdiqlanadi
     const [payment] = await db.insert(paymentsTable).values({
       subscriberId: body.subscriberId,
       planId: body.planId,
       amount: String(body.amount),
       paymentDate: body.paymentDate instanceof Date ? body.paymentDate.toISOString().split("T")[0] : body.paymentDate,
       notes: body.notes,
-      extendSubscription: body.extendSubscription ?? true,
-      status: "pending",
+      extendSubscription: extendSub,
+      status: "confirmed",
     }).returning();
 
     const [subscriber] = await db.select().from(subscribersTable).where(eq(subscribersTable.id, body.subscriberId));
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, body.planId));
+
+    // Obunani uzaytirish
+    if (extendSub && plan && subscriber) {
+      const currentEnd = new Date(subscriber.endDate);
+      const newEnd = new Date(currentEnd);
+      newEnd.setDate(newEnd.getDate() + plan.durationDays);
+      const newEndStr = newEnd.toISOString().split("T")[0];
+
+      await db.update(subscribersTable)
+        .set({ endDate: newEndStr, status: "active", paymentStatus: "paid", debtAmount: "0", updatedAt: new Date() })
+        .where(eq(subscribersTable.id, subscriber.id));
+
+      await db.insert(notificationsTable).values({
+        message: `To'lov qabul qilindi: ${subscriber.firstName} ${subscriber.lastName} — ${plan.name} — ${Number(body.amount).toLocaleString("uz")} so'm`,
+        type: "payment_confirmed",
+        subscriberId: subscriber.id,
+        subscriberName: `${subscriber.firstName} ${subscriber.lastName}`,
+      });
+
+      // Admin Telegram xabari
+      await sendAdminNotification(
+        `✅ *To'lov qabul qilindi!*\n\n` +
+        `👤 ${subscriber.firstName} ${subscriber.lastName}\n` +
+        `💎 Reja: ${plan.name}\n` +
+        `💰 Miqdor: ${Number(body.amount).toLocaleString("uz")} so'm\n` +
+        `📅 Obuna tugaydi: ${newEndStr}`
+      );
+
+      // Mijoz Telegram xabari
+      await notifySubscriber(
+        subscriber.id,
+        `✅ *To'lovingiz qabul qilindi!*\n\n` +
+        `💎 Reja: ${plan.name}\n` +
+        `💰 Miqdor: ${Number(body.amount).toLocaleString("uz")} so'm\n` +
+        `📅 Obunangiz: ${newEndStr} gacha`
+      );
+    }
 
     res.status(201).json(formatPayment(
       payment,
