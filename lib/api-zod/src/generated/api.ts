@@ -396,6 +396,13 @@ export const UpdatePaymentResponse = zod.object({
 });
 
 /**
+ * @summary Delete a payment record
+ */
+export const DeletePaymentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Confirm a payment and activate subscription
  */
 export const ConfirmPaymentParams = zod.object({

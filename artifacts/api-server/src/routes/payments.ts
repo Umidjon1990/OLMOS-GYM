@@ -149,6 +149,18 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+router.delete("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [deleted] = await db.delete(paymentsTable).where(eq(paymentsTable.id, id)).returning();
+    if (!deleted) return res.status(404).json({ error: "Payment not found" });
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete payment");
+    res.status(500).json({ error: "Failed to delete payment" });
+  }
+});
+
 router.post("/:id/confirm", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
