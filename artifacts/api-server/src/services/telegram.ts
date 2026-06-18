@@ -356,12 +356,104 @@ async function findAndShowSubscriberByPhone(chatId: number, phone: string) {
   );
 }
 
+// ─── Expiry Reminder Scheduler ────────────────────────────────────────────────
+function msUntilNextTashkent9am(): number {
+  const now = new Date();
+  const tashkent = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tashkent" }));
+  const target = new Date(tashkent);
+  target.setHours(9, 0, 0, 0);
+  if (tashkent >= target) target.setDate(target.getDate() + 1);
+  return Math.max(target.getTime() - tashkent.getTime(), 0);
+}
+
+export async function sendExpiryReminders(): Promise<{ sent: number; total: number }> {
+  if (!bot) return { sent: 0, total: 0 };
+  const adminChatId = process.env.ADMIN_TELEGRAM_CHAT_ID;
+
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
+  const todayMs = new Date(todayStr).getTime();
+
+  const allActive = await db
+    .select({ sub: subscribersTable, planName: plansTable.name })
+    .from(subscribersTable)
+    .leftJoin(plansTable, eq(subscribersTable.planId, plansTable.id))
+    .where(eq(subscribersTable.status, "active"));
+
+  const expiring = allActive.filter(({ sub }) => {
+    const daysLeft = Math.ceil((new Date(sub.endDate).getTime() - todayMs) / 86400000);
+    return daysLeft >= 1 && daysLeft <= 3;
+  });
+
+  if (expiring.length === 0) return { sent: 0, total: 0 };
+
+  let notified = 0;
+  for (const { sub, planName } of expiring) {
+    const daysLeft = Math.ceil((new Date(sub.endDate).getTime() - todayMs) / 86400000);
+    if (sub.telegramChatId) {
+      try {
+        await bot.sendMessage(
+          sub.telegramChatId,
+          `⏰ *Obuna eslatmasi — OLMOS FITNESS*\n\n` +
+          `Salom, *${sub.firstName} ${sub.lastName}*!\n\n` +
+          `💎 Reja: ${planName ?? "—"}\n` +
+          `📅 Obunangiz *${daysLeft === 1 ? "ertaga" : `${daysLeft} kundan keyin`}* tugaydi!\n` +
+          `🗓 Tugash sanasi: *${sub.endDate}*\n\n` +
+          `To'lovni amalga oshirish uchun adminimiz bilan bog'laning.`,
+          { parse_mode: "Markdown" }
+        );
+        notified++;
+      } catch (err) {
+        logger.warn({ err, subscriberId: sub.id }, "Failed to notify subscriber about expiry");
+      }
+    }
+  }
+
+  // Admin summary
+  if (adminChatId && expiring.length > 0) {
+    const lines = expiring.map(({ sub, planName: pn }) => {
+      const d = Math.ceil((new Date(sub.endDate).getTime() - todayMs) / 86400000);
+      const name = `${sub.firstName} ${sub.lastName}`.trim() || "Noma'lum";
+      const linked = sub.telegramChatId ? "📲" : "📵";
+      return `${linked} *${name}* — ${sub.phone || "—"} | ${pn ?? "—"} | *${d} kun qoldi*`;
+    });
+    try {
+      await bot.sendMessage(
+        adminChatId,
+        `⏰ *Obuna tugaydi — Bugungi eslatma*\n\n${lines.join("\n")}\n\n` +
+        `📊 Jami: ${expiring.length} ta | Telegram orqali: ${notified} ta`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (err) {
+      logger.warn({ err }, "Failed to send admin expiry summary");
+    }
+  }
+
+  logger.info({ total: expiring.length, notified }, "Expiry reminders sent");
+  return { sent: notified, total: expiring.length };
+}
+
+function startExpiryReminderScheduler() {
+  const runAndSchedule = async () => {
+    await sendExpiryReminders().catch(err =>
+      logger.error({ err }, "Expiry reminder scheduler error")
+    );
+    // Next run exactly 24h later
+    setTimeout(runAndSchedule, 24 * 60 * 60 * 1000);
+  };
+
+  const delay = msUntilNextTashkent9am();
+  const nextRun = new Date(Date.now() + delay);
+  logger.info({ nextRun: nextRun.toISOString() }, "Expiry reminder scheduler: first run at 09:00 Tashkent");
+  setTimeout(runAndSchedule, delay);
+}
+
 // ─── Keyboards ────────────────────────────────────────────────────────────────
 const ADMIN_KEYBOARD: TelegramBot.SendMessageOptions = {
   reply_markup: {
     keyboard: [
       [{ text: "➕ Obunachi qo'shish" }, { text: "👥 Obunachilar" }],
       [{ text: "💰 Moliya" }, { text: "📊 Statistika" }],
+      [{ text: "⏰ Eslatma yuborish" }],
     ],
     resize_keyboard: true,
   } as TelegramBot.ReplyKeyboardMarkup,
@@ -575,6 +667,21 @@ export function initTelegramBot(): TelegramBot | null {
         return;
       }
 
+      if (text === "⏰ Eslatma yuborish") {
+        await bot!.sendMessage(chatId, "⏳ Eslatmalar yuborilmoqda...", { parse_mode: "Markdown" });
+        const { sent, total } = await sendExpiryReminders();
+        if (total === 0) {
+          await bot!.sendMessage(chatId, "✅ Hozircha muddati yaqinlashgan a'zo yo'q (1-3 kun).", ADMIN_KEYBOARD);
+        } else {
+          await bot!.sendMessage(
+            chatId,
+            `✅ *Eslatmalar yuborildi!*\n\n📊 Yaqinda tugaydi: ${total} ta\n📲 Telegram orqali: ${sent} ta`,
+            { parse_mode: "Markdown", ...ADMIN_KEYBOARD }
+          );
+        }
+        return;
+      }
+
       await bot!.sendMessage(chatId, "Tugmalardan birini tanlang 👇", ADMIN_KEYBOARD);
     });
 
@@ -701,8 +808,9 @@ export function initTelegramBot(): TelegramBot | null {
           paymentDate: today, status: "confirmed", extendSubscription: true,
         });
 
+        // Yangi muddat har doim oxirgi tugash sanasidan hisoblanadi
         const currentEnd = new Date(sub.endDate);
-        const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()));
+        const newEnd = new Date(currentEnd);
         newEnd.setDate(newEnd.getDate() + plan.durationDays);
         const newEndStr = newEnd.toISOString().split("T")[0];
 
@@ -748,6 +856,9 @@ export function initTelegramBot(): TelegramBot | null {
     bot.on("polling_error", (err) => {
       logger.error({ err: err.message }, "Telegram polling error");
     });
+
+    // Kundalik eslatma scheduler ishga tushirish
+    startExpiryReminderScheduler();
 
     logger.info("Telegram bot started (polling)");
     return bot;
